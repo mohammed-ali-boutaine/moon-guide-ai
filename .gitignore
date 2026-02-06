@@ -36,3 +36,5 @@ dist/
 *.swo
 .DS_Store
 .env
+plan
+.todo
