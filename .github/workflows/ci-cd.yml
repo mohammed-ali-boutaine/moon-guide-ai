@@ -55,8 +55,8 @@ jobs:
       - name: Install backend deps
         working-directory: backend
         run: |
+          pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest ruff black
 
       - name: Lint backend
         working-directory: backend
