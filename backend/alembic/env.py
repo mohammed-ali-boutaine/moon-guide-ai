@@ -1,17 +1,18 @@
+import sys
 from logging.config import fileConfig
 from pathlib import Path
-import sys
+
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from app.core.config import settings
-from app.core.database import Base
-import app.models.base  # noqa: F401
+import app.models.base  # noqa: F401, E402
+from app.core.config import settings  # noqa: E402
+from app.core.database import Base  # noqa: E402
 
 config = context.config
 
