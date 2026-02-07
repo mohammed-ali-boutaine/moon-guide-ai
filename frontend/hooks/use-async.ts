@@ -3,10 +3,7 @@ import { useState, useEffect } from 'react';
 /**
  * Hook for managing loading and error states
  */
-export function useAsync<T>(
-  asyncFunction: () => Promise<T>,
-  immediate = true
-) {
+export function useAsync<T>(asyncFunction: () => Promise<T>, immediate = true) {
   const [status, setStatus] = useState<
     'idle' | 'pending' | 'success' | 'error'
   >('idle');

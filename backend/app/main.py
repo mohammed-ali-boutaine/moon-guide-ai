@@ -22,8 +22,7 @@ app.include_router(health_router, prefix="/api/v1/health", tags=["Health"])
 async def root():
     return {"message": "Moon Guide AI API is running"}
 
+
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
-
-

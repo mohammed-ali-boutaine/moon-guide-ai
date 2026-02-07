@@ -1,4 +1,10 @@
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+} from '@/components/ui';
 
 export default function CareerPage() {
   return (
@@ -18,9 +24,7 @@ export default function CareerPage() {
             </CardHeader>
             <CardContent>
               <div className="mb-6 rounded-lg border-2 border-dashed p-8 text-center">
-                <p className="mb-4 text-gray-600">
-                  Aucun CV téléchargé
-                </p>
+                <p className="mb-4 text-gray-600">Aucun CV téléchargé</p>
                 <Button>Télécharger mon CV</Button>
               </div>
 

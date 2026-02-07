@@ -1,5 +1,5 @@
 *.todo
-
+/env
 # Environment
 .env
 .env.local

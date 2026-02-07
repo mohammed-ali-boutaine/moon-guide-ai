@@ -114,6 +114,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 ### TypeScript
 
 Configuration stricte activée:
+
 - `strict: true`
 - `noUnusedLocals: true`
 - `noUnusedParameters: true`
@@ -138,7 +139,7 @@ import { Button } from '@/components/ui';
 
 <Button variant="primary" size="md">
   Cliquez-moi
-</Button>
+</Button>;
 ```
 
 Variants: `primary`, `secondary`, `outline`, `ghost`
@@ -153,10 +154,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
   <CardHeader>
     <CardTitle>Titre</CardTitle>
   </CardHeader>
-  <CardContent>
-    Contenu de la carte
-  </CardContent>
-</Card>
+  <CardContent>Contenu de la carte</CardContent>
+</Card>;
 ```
 
 ### LoadingSpinner
@@ -164,7 +163,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
 ```tsx
 import { LoadingSpinner } from '@/components/ui';
 
-<LoadingSpinner size="md" />
+<LoadingSpinner size="md" />;
 ```
 
 ## 🎣 Hooks Personnalisés
@@ -219,6 +218,7 @@ npm run format
 ```
 
 Configuration Prettier avec:
+
 - Tri automatique des classes Tailwind
 - Single quotes
 - Semi-colons
