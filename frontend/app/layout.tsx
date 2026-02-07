@@ -6,9 +6,9 @@ import { Header, Footer } from '@/components/layout';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'Moon Guide AI - Assistant IA d\'apprentissage et de carrière',
+  title: "Moon Guide AI - Assistant IA d'apprentissage et de carrière",
   description:
-    'Assistant personnel IA pour l\'apprentissage et la carrière, propulsé par RAG, NLP et personnalisation.',
+    "Assistant personnel IA pour l'apprentissage et la carrière, propulsé par RAG, NLP et personnalisation.",
 };
 
 export default function RootLayout({

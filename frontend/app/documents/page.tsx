@@ -1,4 +1,10 @@
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+} from '@/components/ui';
 
 export default function DocumentsPage() {
   return (

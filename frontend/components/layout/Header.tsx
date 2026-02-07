@@ -6,9 +6,7 @@ export default function Header() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <Link href="/" className="flex items-center space-x-2">
           <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500" />
-          <span className="text-xl font-bold text-gray-900">
-            Moon Guide AI
-          </span>
+          <span className="text-xl font-bold text-gray-900">Moon Guide AI</span>
         </Link>
 
         <nav className="flex items-center space-x-6">

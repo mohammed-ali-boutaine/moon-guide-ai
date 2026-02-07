@@ -1,4 +1,10 @@
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+} from '@/components/ui';
 
 export default function QuizPage() {
   return (
@@ -17,7 +23,9 @@ export default function QuizPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card hover>
           <CardHeader>
-            <CardTitle className="text-lg">Quiz - Introduction à React</CardTitle>
+            <CardTitle className="text-lg">
+              Quiz - Introduction à React
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="mb-4 text-sm text-gray-600">

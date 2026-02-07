@@ -22,7 +22,7 @@
 //           </span>
 //         </h1>
 //         <p className="mx-auto mb-8 max-w-2xl text-lg text-gray-600 animate-slide-up">
-//           Votre assistant personnel IA pour l&apos;apprentissage et la carrière, 
+//           Votre assistant personnel IA pour l&apos;apprentissage et la carrière,
 //           propulsé par RAG, NLP et personnalisation.
 //         </p>
 //         <div className="flex justify-center gap-4">

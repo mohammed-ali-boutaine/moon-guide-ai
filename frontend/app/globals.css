@@ -4,8 +4,9 @@
 
 @layer base {
   :root {
-    --font-inter: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-      Roboto, sans-serif;
+    --font-inter:
+      system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      sans-serif;
   }
 
   * {
