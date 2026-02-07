@@ -1,8 +1,11 @@
 name: CI/CD Pipeline
 
+
 on:
+  # Code is pushed to main or dev
   push:
     branches: [main, dev]
+  # A pull request targets main or dev
   pull_request:
     branches: [main, dev]
 
@@ -10,6 +13,9 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
 
+    
+    # docker containers the run alongside the job
+    # they simulate production dependencies (DB, cache, vector DB)
     services:
       postgres:
         image: postgres:16-alpine
@@ -35,6 +41,8 @@ jobs:
         ports:
           - 6333:6333
 
+    # Environment Variables
+    # These are shared by all steps
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moon_guide
       REDIS_URL: redis://localhost:6379
@@ -42,22 +50,25 @@ jobs:
       FRONTEND_URL: http://localhost:3000
       NEXT_PUBLIC_API_URL: http://localhost:8000
 
+    # Steps are the individual tasks that run sequentially in the job
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       # ---------- BACKEND ----------
+      # install python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
+      # dependencies
       - name: Install backend deps
         working-directory: backend
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Run linting tools to enforce code style & quality
       #  linting checks
             # This step ensures code quality 
             # The code passes Ruff's linting rules (no syntax errors, unused imports, etc.)
@@ -70,6 +81,7 @@ jobs:
           ruff check . 
           black --check .
 
+      # Run backend unit/integration tests
       - name: Run backend tests
         working-directory: backend
         run: pytest
