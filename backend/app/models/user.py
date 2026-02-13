@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.class_ import Class
     from app.models.role import Role
     from app.models.session import Session
     from app.models.user_profile import UserProfile
@@ -50,4 +51,12 @@ class User(Base):
     )
     sessions: Mapped[list["Session"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    taught_classes: Mapped[list["Class"]] = relationship(
+        back_populates="teacher", cascade="all, delete-orphan"
+    )
+    enrolled_classes: Mapped[list["Class"]] = relationship(
+        secondary="class_students",
+        back_populates="students",
+        overlaps="class_students,class_",
     )

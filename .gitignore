@@ -4,7 +4,7 @@
 .env
 .env.local
 .env*.local
-
+*/plan
 # Python
 __pycache__/
 *.py[cod]
@@ -17,7 +17,7 @@ venv/
 *.egg-info/
 dist/
 build/
-
+*.md
 # Node
 node_modules/
 .next/
