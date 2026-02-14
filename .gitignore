@@ -1,2 +1,39 @@
-*.txt
 *.todo
+/env
+# Environment
+.env
+.env.local
+.env*.local
+*/plan
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+*.egg-info/
+dist/
+build/
+*.md
+# Node
+node_modules/
+.next/
+out/
+dist/
+*.log
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+.env
+plan
+.todo

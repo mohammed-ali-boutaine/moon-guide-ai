@@ -1,0 +1,111 @@
+name: CI/CD Pipeline
+
+
+on:
+  # Code is pushed to main or dev
+  push:
+    branches: [main, dev]
+  # A pull request targets main or dev
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    
+    # docker containers the run alongside the job
+    # they simulate production dependencies (DB, cache, vector DB)
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: moon_guide
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+
+    # Environment Variables
+    # These are shared by all steps
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moon_guide
+      REDIS_URL: redis://localhost:6379
+      QDRANT_URL: http://localhost:6333
+      FRONTEND_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+
+    # Steps are the individual tasks that run sequentially in the job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ---------- BACKEND ----------
+      # install python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # dependencies
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Run linting tools to enforce code style & quality
+      #  linting checks
+            # This step ensures code quality 
+            # The code passes Ruff's linting rules (no syntax errors, unused imports, etc.)
+            # The code is formatted consistently with Black's style
+      - name: Lint backend
+        working-directory: backend
+        # ruff : a fast python linter , Ruff catches common errors, style issues, and code smells
+        # black : code formatter (check mode) , ensures consistent code style without modifying files
+        run: |
+          ruff check . 
+          black --check .
+
+      # Run backend unit/integration tests
+      - name: Run backend tests
+        working-directory: backend
+        run: pytest
+
+      # ---------- FRONTEND ----------
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm install
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm run test -- --ci
+
+      # ---------- DOCKER BUILD ----------
+      - name: Build Docker images
+        run: |
+          docker build -t moon-guide-backend ./backend
+          docker build -t moon-guide-frontend ./frontend
