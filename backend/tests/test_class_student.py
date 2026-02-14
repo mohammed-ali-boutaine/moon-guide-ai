@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.models import Class, ClassStudent, User
 
@@ -189,7 +190,7 @@ class TestClassStudentModel:
         cs = ClassStudent(class_id=uuid.uuid4())
         test_session.add(cs)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(IntegrityError):
             test_session.commit()
 
     def test_class_student_index_on_class_id(

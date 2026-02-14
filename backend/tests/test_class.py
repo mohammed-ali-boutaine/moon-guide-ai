@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.models import Class
 
@@ -83,7 +84,7 @@ class TestClassModel:
         test_session.add(test_class)
 
         # Should raise an integrity error
-        with pytest.raises(ValueError):
+        with pytest.raises(IntegrityError):
             test_session.commit()
 
     def test_class_name_required(self, test_session, teacher_user):
@@ -93,7 +94,7 @@ class TestClassModel:
         )
         test_session.add(test_class)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(IntegrityError):
             test_session.commit()
 
     def test_cascade_delete_classes(self, test_session, teacher_user):
