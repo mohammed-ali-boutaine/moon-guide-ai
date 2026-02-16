@@ -1,11 +1,17 @@
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional,Any
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
+from app.core.logging import logger
+
+
+import jwt
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +22,6 @@ if not SECRET_KEY:
     )
     raise ValueError("SECRET_KEY environment variable must be set")
 
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -29,12 +33,18 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(
-            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
 
-    to_encode.update({"exp": expire})
+    payload = {
+        "sub": str(data.get("user_id")),
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "type": "access"
+    }
+        
     try:
-        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        encoded_jwt = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
         logger.debug("Access token created successfully")
         return encoded_jwt
     except Exception as e:
@@ -45,7 +55,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 def verify_token(token: str):
     """Verify JWT token and return payload"""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "access":
+            logger.warning("Invalid token type")
+            return None
+        
         logger.debug("Token verified successfully")
         return payload
     except JWTError as e:

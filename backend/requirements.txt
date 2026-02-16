@@ -15,11 +15,14 @@ alembic==1.11.1
 
 python-jose[cryptography]
 passlib
+jwt
+
 # Testing dependencies
 pytest==7.3.1
 httpx==0.26.0
 pytest-asyncio==0.21.1
 
 # Linting and formatting
-ruff==0.1.14
-black==24.1.1
+# ruff==0.1.14
+# black==24.1.1
+

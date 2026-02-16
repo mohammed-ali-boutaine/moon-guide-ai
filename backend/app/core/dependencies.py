@@ -1,30 +1,38 @@
+# app/core/dependencies.py (CORRECTED)
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session as DBSession
 
 from app.core.database import get_db
 from app.core.logging import logger
 from app.models.role import RoleName
+from app.models.session import Session
 from app.models.user import User
 from app.utils.jwt import verify_token
 
-# This is a placeholder - replace with your actual JWT verification logic
 security = HTTPBearer()
 
 
 def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[DBSession, Depends(get_db)],
 ) -> User:
     """
-    Get current authenticated user from JWT token
+    Dependency to get current authenticated user from access token
+    Validates:
+    - Token structure and signature
+    - Token hasn't expired
+    - Session exists and isn't revoked
+    - User exists and is active
     """
     try:
-        # Verify token
-        payload = verify_token(credentials.credentials)
+        token = credentials.credentials
+        
+        # Verify JWT token
+        payload = verify_token(token)
         if payload is None:
             logger.warning("Invalid token received")
             raise HTTPException(
@@ -32,7 +40,7 @@ def get_current_user(
                 detail="Invalid authentication credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-
+        
         # Get user ID from token
         user_id_str: str = payload.get("sub")
         if user_id_str is None:
@@ -52,6 +60,20 @@ def get_current_user(
                 detail="Invalid authentication credentials",
             ) from err
 
+        # Verify session exists and is valid (MOVED HERE)
+        session = db.query(Session).filter(
+            Session.access_token == token,
+            Session.revoked_at.is_(None)
+        ).first()
+        
+        if not session:
+            logger.warning(f"Session not found or revoked for user: {user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session not found or has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         # Fetch user from database
         user = db.query(User).filter(User.id == user_id).first()
         if user is None:
@@ -63,6 +85,7 @@ def get_current_user(
 
         logger.info(f"User authenticated: {user.email}")
         return user
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -91,13 +114,7 @@ def get_current_active_user(
 def require_role(allowed_roles: list[RoleName]):
     """
     Dependency factory to check if user has required role
-
-    Usage:
-        @app.get("/teacher-only")
-        async def teacher_endpoint(user: Annotated[User, Depends(require_role([RoleName.TEACHER]))]):
-            ...
     """
-
     def role_checker(
         current_user: Annotated[User, Depends(get_current_active_user)]
     ) -> User:
