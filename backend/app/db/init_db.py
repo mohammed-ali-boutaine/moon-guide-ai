@@ -27,7 +27,7 @@ def init_roles(db: Session) -> None:
     
     if created_count > 0:
         db.commit()
-        logger.info(f"✅ {created_count} role(s) initialized successfully")
+        logger.info(f"[OK] {created_count} role(s) initialized successfully")
     else:
         logger.info("All roles already exist")
 

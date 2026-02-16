@@ -1,7 +1,7 @@
 # app/core/security.py
 from datetime import datetime, timedelta, timezone
 from typing import Any
-import jwt
+from jose import jwt
 from passlib.context import CryptContext
 import secrets
 from app.core.config import settings
@@ -48,10 +48,10 @@ def verify_access_token(token: str) -> dict[str, Any]:
         if payload.get("type") != "access":
             raise ValueError("Invalid token type")
         return payload
-    except jwt.ExpiredSignatureError:
-        raise ValueError("Token has expired")
-    except jwt.InvalidTokenError:
-        raise ValueError("Invalid token")
+    except ValueError as e:
+        raise ValueError(str(e))
+    except Exception as e:
+        raise ValueError(f"Invalid token: {str(e)}")
     
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 REFRESH_TOKEN_EXPIRE_DAYS = settings.REFRESH_TOKEN_EXPIRE_DAYS

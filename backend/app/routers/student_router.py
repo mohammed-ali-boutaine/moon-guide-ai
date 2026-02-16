@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.dependencies.auth import StudentUser
+from app.core.dependencies import StudentUser
 from app.schemas.class_schema import (
     PaginatedStudentClassResponse,
     StudentClassResponse,

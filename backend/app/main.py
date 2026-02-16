@@ -1,4 +1,3 @@
-# app/core/database.py
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from contextlib import asynccontextmanager
@@ -6,6 +5,10 @@ from app.core.config import settings
 from fastapi import FastAPI
 from app.db.init_db import init_db  
 from app.core.logging import logger
+from app.api.health import router as health_router
+from app.routers.auth_router import router as auth_router
+from app.routers.class_router import router as class_router
+from app.routers.student_router import router as student_router
 
 
 @asynccontextmanager
@@ -24,6 +27,19 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down application...")
 
 
+# Create FastAPI app instance
+app = FastAPI(
+    title="Moon Guide AI API",
+    description="Backend API for Moon Guide AI",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Include routers
+app.include_router(health_router)
+app.include_router(auth_router)
+app.include_router(class_router)
+app.include_router(student_router)
 
 # Create engine
 engine = create_engine(

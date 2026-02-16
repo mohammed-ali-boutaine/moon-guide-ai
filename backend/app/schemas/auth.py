@@ -1,5 +1,5 @@
 # app/schemas/auth.py
-from backend.app.models.role import RoleName
+from app.models.role import RoleName
 from pydantic import BaseModel, EmailStr ,Field
 
 

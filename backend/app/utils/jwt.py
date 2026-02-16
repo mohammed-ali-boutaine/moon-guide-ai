@@ -9,13 +9,11 @@ from app.core.config import settings
 from app.core.logging import logger
 
 
-import jwt
-
-
 
 logger = logging.getLogger(__name__)
 
 SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
 if not SECRET_KEY:
     logger.error(
         "SECRET_KEY environment variable is not set. Please set it before running the application."
@@ -37,7 +35,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         )
 
     payload = {
-        "sub": str(data.get("user_id")),
+        "sub": str(data.get("sub")),
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "access"
