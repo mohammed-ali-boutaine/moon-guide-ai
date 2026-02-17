@@ -335,6 +335,7 @@ class ClassService:
         skip: int = 0,
         limit: int = 10,
         search: str | None = None,
+        sort_by: str = "created_at",
     ) -> tuple[list[Class], int]:
         """
         Get all classes a student is enrolled in
@@ -345,6 +346,7 @@ class ClassService:
             skip: Number of records to skip
             limit: Maximum number of records to return
             search: Optional search term for class name
+            sort_by: Sort field (created_at or name)
 
         Returns:
             Tuple of (list of classes, total count)
@@ -364,16 +366,17 @@ class ClassService:
         count_query = select(func.count()).select_from(query.subquery())
         total = db.execute(count_query).scalar_one()
 
+        # Apply sorting
+        if sort_by == "name":
+            query = query.order_by(Class.name.asc())
+        else:
+            query = query.order_by(Class.created_at.desc())
+
         # Get paginated results with related data
-        query = (
-            query.options(
-                joinedload(Class.teacher).joinedload(User.profile),
-                selectinload(Class.class_students),
-            )
-            .order_by(Class.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
+        query = query.options(
+            joinedload(Class.teacher).joinedload(User.profile),
+            selectinload(Class.class_students),
+        ).offset(skip).limit(limit)
 
         classes = db.execute(query).scalars().unique().all()
         return list(classes), total

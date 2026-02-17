@@ -50,7 +50,7 @@ async def list_my_classes(
     """
     skip = (page - 1) * page_size
     classes, total = ClassService.get_student_classes(
-        db, current_user.id, skip=skip, limit=page_size, search=search
+        db, current_user.id, skip=skip, limit=page_size, search=search, sort_by=sort_by
     )
 
     # Build response with detailed information
