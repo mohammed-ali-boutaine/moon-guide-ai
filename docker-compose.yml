@@ -93,7 +93,7 @@ services:
         # condition: service_healthy
     networks:
       - moon-guide-network
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # Next.js Frontend
   frontend:

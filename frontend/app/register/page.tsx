@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -12,48 +13,29 @@ export default function RegisterPage() {
     confirmPassword: '',
     role: 'STUDENT' as 'STUDENT' | 'TEACHER',
   });
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const { register, isLoading } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError('');
 
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
       setError('Les mots de passe ne correspondent pas');
-      setIsLoading(false);
       return;
     }
 
     try {
-      // Add your registration API call here
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          role: formData.role,
-        }),
+      await register({
+        email: formData.email,
+        password: formData.password,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        role: formData.role,
       });
-
-      if (!response.ok) {
-        throw new Error('Registration failed');
-      }
-
-      const data = await response.json();
-      // Handle successful registration (e.g., redirect to login)
-      console.log('Registration successful:', data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
     }
   };
 

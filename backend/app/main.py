@@ -1,15 +1,17 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 from contextlib import asynccontextmanager
 from app.core.config import settings  
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.db.init_db import init_db  
 from app.core.logging import logger
 from app.api.health import router as health_router
 from app.routers.auth_router import router as auth_router
 from app.routers.class_router import router as class_router
 from app.routers.student_router import router as student_router
-
+from app.routers.users_router import router as users_router
+from app.core.database import Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,11 +37,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Include routers
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(class_router)
 app.include_router(student_router)
+app.include_router(users_router)
 
 # Create engine
 engine = create_engine(
