@@ -2,6 +2,7 @@
 
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useAuth } from '@/contexts/auth-context';
+import { Sidebar } from '@/components/layout';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 
@@ -17,6 +18,8 @@ export default function TeacherDashboard() {
   const { user, logout } = useAuth();
   const [classes, setClasses] = useState<Class[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -42,8 +45,8 @@ export default function TeacherDashboard() {
   const stats = [
     { label: 'My Classes', value: classes.length.toString(), icon: '📚' },
     { label: 'Total Students', value: classes.reduce((acc, c) => acc + c.student_count, 0).toString(), icon: '👨‍🎓' },
-    { label: 'Documents', value: '24', icon: '📄' },
-    { label: 'Quizzes Created', value: '12', icon: '📝' },
+    { label: 'Documents', value: '0', icon: '📄' },
+    { label: 'Quizzes Created', value: '0', icon: '📝' },
   ];
 
   const recentStudents = [
@@ -55,29 +58,31 @@ export default function TeacherDashboard() {
   return (
     <ProtectedRoute allowedRoles={['TEACHER']}>
       <div className="min-h-screen bg-[#0a0a0f]">
-        {/* Header */}
-        <header className="bg-gray-900 border-b border-gray-800">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <div className="flex items-center space-x-4">
-                <h1 className="text-2xl font-bold text-gray-100">Teacher Dashboard</h1>
-                <span className="px-3 py-1 bg-blue-900/50 text-blue-300 text-sm font-medium rounded-full border border-blue-800">
-                  Teacher
-                </span>
-              </div>
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-400">
-                  {user?.profile?.first_name} {user?.profile?.last_name}
-                </span>
-                <button onClick={logout} className="text-sm text-red-400 hover:text-red-300 font-medium">
-                  Sign out
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
+        <div className="flex">
+          {/* Mobile Sidebar Toggle */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="lg:hidden fixed top-20 left-4 z-30 p-2 rounded-lg bg-gray-800 text-white shadow-lg"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Sidebar */}
+          <Sidebar 
+            isOpen={isSidebarOpen} 
+            onClose={() => setIsSidebarOpen(false)} 
+            collapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          />
+
+          {/* Main Content */}
+          <main className="flex-1 lg:ml-0">
+            {/* Header */}
+          
+
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Welcome */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-100">
@@ -111,7 +116,7 @@ export default function TeacherDashboard() {
                 <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
                   <h2 className="text-lg font-semibold text-gray-100">My Classes</h2>
                   <Link
-                    href="/dashboard/teacher/classes/new"
+                    href="/dashboard/teacher/classes"
                     className="text-sm bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
                   >
                     + New Class
@@ -125,7 +130,7 @@ export default function TeacherDashboard() {
                   ) : classes.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-gray-500 mb-4">You don&apos;t have any classes yet</p>
-                      <Link href="/dashboard/teacher/classes/new" className="text-primary-400 hover:text-primary-300 font-medium">
+                      <Link href="/dashboard/teacher/classes" className="text-primary-400 hover:text-primary-300 font-medium">
                         Create your first class →
                       </Link>
                     </div>
@@ -225,6 +230,8 @@ export default function TeacherDashboard() {
               </div>
             </div>
           </div>
+            </div>
+          </main>
         </div>
       </div>
     </ProtectedRoute>
