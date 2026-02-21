@@ -7,9 +7,9 @@ import { AuthProvider } from '@/contexts/auth-context';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: "Moon Guide AI - Assistant IA d'apprentissage et de carrière",
+  title: 'Moon Guide AI - AI-Powered Learning & Career Assistant',
   description:
-    "Assistant personnel IA pour l'apprentissage et la carrière, propulsé par RAG, NLP et personnalisation.",
+    'Your personal AI assistant for learning and career growth, powered by RAG, NLP, and personalization.',
 };
 
 export default function RootLayout({
@@ -18,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr" className={inter.variable}>
+    <html lang="en" className={inter.variable}>
       <body className="flex min-h-screen flex-col">
         <AuthProvider>
           <Header />
