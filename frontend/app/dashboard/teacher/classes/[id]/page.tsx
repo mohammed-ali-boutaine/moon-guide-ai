@@ -8,6 +8,7 @@ import { StudentTable, AddStudentModal } from '@/components/classes';
 import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { ProtectedRoute } from '@/components/auth';
+import { Sidebar } from '@/components/layout';
 
 function ClassDetailContent() {
   const params = useParams();
@@ -15,8 +16,11 @@ function ClassDetailContent() {
   const classId = params.id as string;
 
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const { data: classDetail, isLoading, error } = useClassDetail(classId);
+  const { data: classDetail, isLoading, error } = useClassDetail(classId, searchQuery || undefined);
   const { mutate: removeStudent } = useRemoveStudent(classId);
 
   const handleRemoveStudent = (studentId: string) => {
@@ -31,7 +35,7 @@ function ClassDetailContent() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="flex justify-center items-center min-h-screen bg-[#0a0a0f]">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -39,21 +43,43 @@ function ClassDetailContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-red-400 mb-2">Error Loading Class</h2>
-            <p className="text-gray-300">
-              {error instanceof Error ? error.message : 'Failed to load class details'}
-            </p>
-            <Button
-              variant="outline"
-              onClick={() => router.push('/dashboard/teacher/classes')}
-              className="mt-4"
-            >
-              Back to Classes
-            </Button>
-          </div>
+      <div className="min-h-screen bg-[#0a0a0f]">
+        <div className="flex">
+          {/* Mobile Sidebar Toggle */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="lg:hidden fixed top-20 left-4 z-30 p-2 rounded-lg bg-gray-800 text-white shadow-lg"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
+          {/* Sidebar */}
+          <Sidebar 
+            isOpen={isSidebarOpen} 
+            onClose={() => setIsSidebarOpen(false)} 
+            collapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          />
+
+          <main className="flex-1 lg:ml-0">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
+                <h2 className="text-xl font-semibold text-red-400 mb-2">Error Loading Class</h2>
+                <p className="text-gray-300">
+                  {error instanceof Error ? error.message : 'Failed to load class details'}
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/dashboard/teacher/classes')}
+                  className="mt-4"
+                >
+                  Back to Classes
+                </Button>
+              </div>
+            </div>
+          </main>
         </div>
       </div>
     );
@@ -61,27 +87,68 @@ function ClassDetailContent() {
 
   if (!classDetail) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
-            <h2 className="text-xl font-semibold text-gray-300 mb-2">Class Not Found</h2>
-            <p className="text-gray-400 mb-4">The class you're looking for doesn't exist or you don't have access to it.</p>
-            <Button
-              variant="primary"
-              onClick={() => router.push('/dashboard/teacher/classes')}
-            >
-              Back to Classes
-            </Button>
-          </div>
+      <div className="min-h-screen bg-[#0a0a0f]">
+        <div className="flex">
+          {/* Mobile Sidebar Toggle */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="lg:hidden fixed top-20 left-4 z-30 p-2 rounded-lg bg-gray-800 text-white shadow-lg"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
+          {/* Sidebar */}
+          <Sidebar 
+            isOpen={isSidebarOpen} 
+            onClose={() => setIsSidebarOpen(false)} 
+            collapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          />
+
+          <main className="flex-1 lg:ml-0">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
+                <h2 className="text-xl font-semibold text-gray-300 mb-2">Class Not Found</h2>
+                <p className="text-gray-400 mb-4">The class you're looking for doesn't exist or you don't have access to it.</p>
+                <Button
+                  variant="primary"
+                  onClick={() => router.push('/dashboard/teacher/classes')}
+                >
+                  Back to Classes
+                </Button>
+              </div>
+            </div>
+          </main>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Breadcrumb */}
+    <div className="min-h-screen bg-[#0a0a0f]">
+      <div className="flex">
+        {/* Mobile Sidebar Toggle */}
+        <button
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="lg:hidden fixed top-20 left-4 z-30 p-2 rounded-lg bg-gray-800 text-white shadow-lg"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        {/* Sidebar */}
+        <Sidebar 
+          isOpen={isSidebarOpen} 
+          onClose={() => setIsSidebarOpen(false)} 
+          collapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        />
+
+        <main className="flex-1 lg:ml-0">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{/* Breadcrumb */}
         <nav className="mb-6 text-sm">
           <ol className="flex items-center space-x-2 text-gray-400">
             <li>
@@ -219,12 +286,40 @@ function ClassDetailContent() {
             </Button>
           </div>
 
+          {/* Search Input */}
+          <div className="mb-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search students by email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 pl-10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              <svg
+                className="absolute left-3 top-2.5 w-5 h-5 text-gray-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+          </div>
+
           <StudentTable
             students={classDetail.students}
             onRemove={handleRemoveStudent}
             isLoading={false}
           />
         </div>
+          </div>
+        </main>
       </div>
 
       {/* Add Student Modal */}
