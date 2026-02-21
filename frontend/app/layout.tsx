@@ -1,15 +1,16 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { Header, Footer } from '@/components/layout';
 import { AuthProvider } from '@/contexts/auth-context';
+import { QueryProvider } from '@/contexts/query-provider';
+import LayoutWrapper from '@/components/layout/LayoutWrapper';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: "Moon Guide AI - Assistant IA d'apprentissage et de carrière",
+  title: 'Moon Guide AI - AI-Powered Learning & Career Assistant',
   description:
-    "Assistant personnel IA pour l'apprentissage et la carrière, propulsé par RAG, NLP et personnalisation.",
+    'Your personal AI assistant for learning and career growth, powered by RAG, NLP, and personalization.',
 };
 
 export default function RootLayout({
@@ -18,13 +19,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr" className={inter.variable}>
+    <html lang="en" className={inter.variable}>
       <body className="flex min-h-screen flex-col">
-        <AuthProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-        </AuthProvider>
+        <QueryProvider>
+          <AuthProvider>
+            <LayoutWrapper>{children}</LayoutWrapper>
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );
