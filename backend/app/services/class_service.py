@@ -257,6 +257,115 @@ class ClassService:
             return None, "Error adding student to class"
 
     @staticmethod
+    def add_students_to_class_batch(
+        db: Session, class_id: UUID, emails: list[str], teacher_id: UUID
+    ) -> tuple[list[dict], str | None]:
+        """
+        Add multiple students to a class by email
+
+        Args:
+            db: Database session
+            class_id: Class ID
+            emails: List of student email addresses
+            teacher_id: Teacher ID (for ownership verification)
+
+        Returns:
+            Tuple of (list of results, error message for ownership issues or None)
+            Each result is a dict with: email, success, error, student_data
+        """
+        # Verify class ownership once
+        class_obj = ClassService.get_class_by_id(db, class_id, teacher_id)
+        if not class_obj:
+            return [], "Class not found or you don't have permission"
+
+        results = []
+
+        for email in emails:
+            email = email.strip().lower()
+            if not email:
+                continue
+
+            result = {
+                "email": email,
+                "success": False,
+                "error": None,
+                "student_data": None,
+            }
+
+            # Find student by email
+            student = db.execute(
+                select(User)
+                .where(User.email == email)
+                .options(joinedload(User.role), joinedload(User.profile))
+            ).scalar_one_or_none()
+
+            if not student:
+                result["error"] = f"No user found with email: {email}"
+                results.append(result)
+                continue
+
+            # Verify student role
+            if not student.role or student.role.name != RoleName.STUDENT:
+                result["error"] = "User is not a student"
+                results.append(result)
+                continue
+
+            # Check if student is already in class
+            existing = db.execute(
+                select(ClassStudent).where(
+                    ClassStudent.class_id == class_id,
+                    ClassStudent.student_id == student.id,
+                )
+            ).scalar_one_or_none()
+
+            if existing:
+                result["error"] = "Student is already enrolled in this class"
+                results.append(result)
+                continue
+
+            # Add student to class
+            try:
+                class_student = ClassStudent(
+                    class_id=class_id, student_id=student.id
+                )
+                db.add(class_student)
+                db.commit()
+                db.refresh(class_student)
+
+                # Load the relationship data
+                db.refresh(student)
+
+                # Build student data response
+                result["success"] = True
+                result["student_data"] = {
+                    "id": student.id,
+                    "email": student.email,
+                    "first_name": (
+                        student.profile.first_name if student.profile else ""
+                    ),
+                    "last_name": student.profile.last_name if student.profile else "",
+                    "joined_at": class_student.joined_at,
+                }
+
+                logger.info(f"Student {student.email} added to class {class_id}")
+            except IntegrityError as e:
+                db.rollback()
+                logger.warning(
+                    f"Integrity error adding student {email} to class: {str(e)}"
+                )
+                result["error"] = "Error adding student to class"
+            except Exception as e:
+                db.rollback()
+                logger.error(
+                    f"Error adding student {email} to class: {str(e)}", exc_info=True
+                )
+                result["error"] = "Error adding student to class"
+
+            results.append(result)
+
+        return results, None
+
+    @staticmethod
     def remove_student_from_class(
         db: Session, class_id: UUID, student_id: UUID, teacher_id: UUID
     ) -> tuple[bool, str | None]:
