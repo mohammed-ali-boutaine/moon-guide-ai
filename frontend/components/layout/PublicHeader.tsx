@@ -1,16 +1,29 @@
 'use client';
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
 
 export default function PublicHeader() {
+  const [isScrolled, setIsScrolled] = useState(false);
+
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/about', label: 'About' },
     { href: '/contact', label: 'Contact' },
   ];
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <header className="border-b border-gray-800 bg-black shadow-md">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <header className={`fixed top-0 left-0 right-0 z-50 border-b border-gray-800 bg-black/95 backdrop-blur-sm shadow-md transition-all duration-300 ${
+      isScrolled ? 'h-14' : 'h-16'
+    }`}>
+      <div className="container mx-auto flex h-full items-center justify-between px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center space-x-2">
           <span className="text-xl font-bold text-white tracking-tight">

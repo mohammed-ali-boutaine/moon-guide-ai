@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { useState, useEffect } from 'react';
 
 interface SidebarItem {
   href: string;
@@ -111,17 +112,27 @@ interface SidebarProps {
 export default function Sidebar({ isOpen = true, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const role = user?.role || 'STUDENT';
   const navItems = navigationItems[role] || navigationItems.STUDENT;
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
     <>
       <aside
         className={cn(
-          'sticky top-16 left-0 z-40 bg-gray-900 border-r border-gray-800 h-[calc(100vh-4rem)] transition-all duration-300 ease-in-out flex flex-col',
+          'sticky left-0 z-40 bg-gray-900 border-r border-gray-800 transition-all duration-300 ease-in-out flex flex-col',
           collapsed ? 'w-16' : 'w-64',
-          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+          isScrolled ? 'top-14 h-[calc(100vh-3.5rem)]' : 'top-16 h-[calc(100vh-4rem)]'
         )}
       >
         <div className="flex items-center justify-end p-3 border-b border-gray-800 h-14">

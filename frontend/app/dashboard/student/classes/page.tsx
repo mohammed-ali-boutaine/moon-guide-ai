@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/protected-route';
-import { Sidebar } from '@/components/layout';
+import { Sidebar, MobileSidebarToggle } from '@/components/layout';
 import { LoadingSpinner } from '@/components/ui';
 import { useStudentClasses } from '@/hooks/use-classes';
 import type { StudentClass } from '@/types';
@@ -25,14 +25,10 @@ function StudentClassesContent() {
     <div className="min-h-screen bg-[#0a0a0f]">
       <div className="flex">
         {/* Mobile Sidebar Toggle */}
-        <button
+        <MobileSidebarToggle
+          isOpen={isSidebarOpen}
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="lg:hidden fixed top-20 left-4 z-30 p-2 rounded-lg bg-gray-800 text-white shadow-lg"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
+        />
 
         {/* Sidebar */}
         <Sidebar
