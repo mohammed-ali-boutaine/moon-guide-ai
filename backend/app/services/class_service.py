@@ -531,3 +531,52 @@ class ClassService:
         ).scalar_one_or_none()
 
         return class_student.joined_at if class_student else None
+
+    @staticmethod
+    def get_recent_students_for_teacher(
+        db: Session, teacher_id: UUID, limit: int = 10
+    ) -> list[dict]:
+        """
+        Get recent students who joined any class owned by the teacher.
+
+        Args:
+            db: Database session
+            teacher_id: Teacher ID
+            limit: Maximum number of records to return
+
+        Returns:
+            List of dicts with student and class join info
+        """
+        query = (
+            select(User, ClassStudent.joined_at, Class.id.label("class_id"), Class.name.label("class_name"))
+            .join(ClassStudent, ClassStudent.student_id == User.id)
+            .join(Class, Class.id == ClassStudent.class_id)
+            .where(Class.teacher_id == teacher_id)
+            .order_by(ClassStudent.joined_at.desc())
+            .limit(limit)
+            .options(joinedload(User.profile))
+        )
+
+        rows = db.execute(query).all()
+
+        results: list[dict] = []
+        for row in rows:
+            # row is a Row mapping: (User, joined_at, class_id, class_name)
+            user = row[0]
+            joined_at = row[1]
+            class_id = row[2]
+            class_name = row[3]
+
+            results.append(
+                {
+                    "id": user.id,
+                    "email": user.email,
+                    "first_name": user.profile.first_name if getattr(user, "profile", None) else "",
+                    "last_name": user.profile.last_name if getattr(user, "profile", None) else "",
+                    "joined_at": joined_at,
+                    "class_id": class_id,
+                    "class_name": class_name,
+                }
+            )
+
+        return results

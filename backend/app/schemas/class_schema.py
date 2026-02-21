@@ -38,6 +38,20 @@ class StudentInClass(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RecentStudent(BaseModel):
+    """Recently joined student with class info"""
+
+    id: UUID
+    email: str
+    first_name: str
+    last_name: str
+    joined_at: datetime
+    class_id: UUID
+    class_name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Teacher information
 class TeacherInfo(BaseModel):
     """Teacher basic information"""
