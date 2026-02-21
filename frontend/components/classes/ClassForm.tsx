@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import type { Class } from '@/types';
 
 interface ClassFormData {
   name: string;
@@ -8,11 +9,7 @@ interface ClassFormData {
 }
 
 interface ClassFormProps {
-  initialData?: {
-    id: string;
-    name: string;
-    description: string;
-  };
+  initialData?: Class;
   onSubmit: (data: ClassFormData) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
@@ -36,7 +33,7 @@ export default function ClassForm({
     if (initialData) {
       setFormData({
         name: initialData.name,
-        description: initialData.description,
+        description: initialData.description ?? '',
       });
     }
   }, [initialData]);
