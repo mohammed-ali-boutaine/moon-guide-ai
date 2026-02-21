@@ -1,35 +1,17 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type {
+  Class,
+  PaginatedClasses,
+  CreateClassData,
+  UpdateClassData,
+  ClassDetail,
+  AddStudentsResponse,
+  StudentInClass,
+} from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-interface Class {
-  id: string;
-  name: string;
-  description: string;
-  student_count: number;
-  teacher_id: string;
-  created_at: string;
-}
-
-interface PaginatedClasses {
-  items: Class[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
-
-interface CreateClassData {
-  name: string;
-  description: string;
-}
-
-interface UpdateClassData {
-  name?: string;
-  description?: string;
-}
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = localStorage.getItem('access_token');
@@ -216,3 +198,106 @@ export function useDeleteClass() {
     },
   });
 }
+
+// Fetch class detail with students
+async function fetchClassDetail(classId: string): Promise<ClassDetail> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/classes/${classId}`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to fetch class details');
+  }
+
+  return response.json();
+}
+
+// Add multiple students to class
+async function addStudentsToClass(classId: string, emails: string[]): Promise<AddStudentsResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/classes/${classId}/students/batch`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ emails }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to add students');
+  }
+
+  return response.json();
+}
+
+// Remove student from class
+async function removeStudentFromClass(classId: string, studentId: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/classes/${classId}/students/${studentId}`, {
+    method: 'DELETE',
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to remove student');
+  }
+}
+
+// Hook to fetch class detail
+export function useClassDetail(classId: string) {
+  return useQuery({
+    queryKey: ['class', classId],
+    queryFn: () => fetchClassDetail(classId),
+    enabled: !!classId,
+  });
+}
+
+// Hook to add students to class
+export function useAddStudents(classId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (emails: string[]) => addStudentsToClass(classId, emails),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['class', classId] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+    },
+  });
+}
+
+// Hook to remove student from class
+export function useRemoveStudent(classId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (studentId: string) => removeStudentFromClass(classId, studentId),
+    onMutate: async (studentId) => {
+      await queryClient.cancelQueries({ queryKey: ['class', classId] });
+
+      const previousClass = queryClient.getQueryData<ClassDetail>(['class', classId]);
+
+      queryClient.setQueryData<ClassDetail>(['class', classId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          students: old.students.filter((s) => s.id !== studentId),
+          student_count: old.student_count - 1,
+        };
+      });
+
+      return { previousClass };
+    },
+    onError: (_err, _studentId, context) => {
+      if (context?.previousClass) {
+        queryClient.setQueryData(['class', classId], context.previousClass);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['class', classId] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+    },
+  });
+}
+

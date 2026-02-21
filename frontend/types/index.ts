@@ -38,3 +38,66 @@ export interface ApiResponse<T> {
   message?: string;
   error?: string;
 }
+
+// Class-related types
+export interface StudentInClass {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  joined_at: string;
+}
+
+export interface Class {
+  id: string;
+  name: string;
+  description: string | null;
+  student_count: number;
+  teacher_id: string;
+  created_at: string;
+}
+
+export interface ClassDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  teacher_id: string;
+  created_at: string;
+  students: StudentInClass[];
+  student_count: number;
+}
+
+export interface PaginatedClasses {
+  items: Class[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CreateClassData {
+  name: string;
+  description: string;
+}
+
+export interface UpdateClassData {
+  name?: string;
+  description?: string;
+}
+
+export interface AddStudentResult {
+  email: string;
+  success: boolean;
+  error: string | null;
+  student: StudentInClass | null;
+}
+
+export interface AddStudentsResponse {
+  results: AddStudentResult[];
+  summary: {
+    total: number;
+    successful: number;
+    failed: number;
+  };
+}
+
