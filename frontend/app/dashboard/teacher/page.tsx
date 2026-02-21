@@ -2,7 +2,7 @@
 
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useAuth } from '@/contexts/auth-context';
-import { Sidebar } from '@/components/layout';
+import { Sidebar, MobileSidebarToggle } from '@/components/layout';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 
@@ -15,7 +15,7 @@ interface Class {
 }
 
 export default function TeacherDashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [classes, setClasses] = useState<Class[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -60,14 +60,10 @@ export default function TeacherDashboard() {
       <div className="min-h-screen bg-[#0a0a0f]">
         <div className="flex">
           {/* Mobile Sidebar Toggle */}
-          <button
+          <MobileSidebarToggle
+            isOpen={isSidebarOpen}
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="lg:hidden fixed top-20 left-4 z-30 p-2 rounded-lg bg-gray-800 text-white shadow-lg"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+          />
 
           {/* Sidebar */}
           <Sidebar 
@@ -78,10 +74,7 @@ export default function TeacherDashboard() {
           />
 
           {/* Main Content */}
-          <main className="flex-1 lg:ml-0">
-            {/* Header */}
-          
-
+          <main className="flex-1 lg:ml-0">          
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Welcome */}
           <div className="mb-8">

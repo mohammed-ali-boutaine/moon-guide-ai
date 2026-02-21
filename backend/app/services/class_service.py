@@ -92,15 +92,16 @@ class ClassService:
 
     @staticmethod
     def get_class_by_id(
-        db: Session, class_id: UUID, teacher_id: UUID | None = None
+        db: Session, class_id: UUID, teacher_id: UUID | None = None, search: str | None = None
     ) -> Class | None:
         """
-        Get a class by ID, optionally verifying ownership
+        Get a class by ID, optionally verifying ownership and filtering students by email
 
         Args:
             db: Database session
             class_id: Class ID
             teacher_id: Optional teacher ID to verify ownership
+            search: Optional search term to filter students by email
 
         Returns:
             Class if found and owned by teacher, None otherwise
@@ -110,12 +111,31 @@ class ClassService:
         if teacher_id:
             query = query.where(Class.teacher_id == teacher_id)
 
-        query = query.options(
-            selectinload(Class.class_students).joinedload(ClassStudent.class_),
-            selectinload(Class.students).joinedload(User.profile),
-        )
+        # Load students with profile, and filter by email if search is provided
+        if search:
+            query = query.options(
+                selectinload(Class.class_students),
+                selectinload(Class.students)
+                .joinedload(User.profile)
+                .load_only()  # We'll filter students separately
+            )
+        else:
+            query = query.options(
+                selectinload(Class.class_students).joinedload(ClassStudent.class_),
+                selectinload(Class.students).joinedload(User.profile),
+            )
 
         result = db.execute(query).scalar_one_or_none()
+        
+        # Filter students by email if search is provided
+        if result and search:
+            filtered_students = [
+                student for student in result.students
+                if search.lower() in student.email.lower()
+            ]
+            # Replace the students list with filtered results
+            result.students = filtered_students
+        
         return result
 
     @staticmethod

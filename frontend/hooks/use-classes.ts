@@ -8,7 +8,6 @@ import type {
   UpdateClassData,
   ClassDetail,
   AddStudentsResponse,
-  StudentInClass,
 } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -200,9 +199,14 @@ export function useDeleteClass() {
 }
 
 // Fetch class detail with students
-async function fetchClassDetail(classId: string): Promise<ClassDetail> {
+async function fetchClassDetail(classId: string, search?: string): Promise<ClassDetail> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${API_URL}/api/classes/${classId}`, {
+  const params = new URLSearchParams();
+  if (search) {
+    params.append('search', search);
+  }
+  const url = `${API_URL}/api/classes/${classId}${search ? `?${params}` : ''}`;
+  const response = await fetch(url, {
     headers,
   });
 
@@ -246,10 +250,10 @@ async function removeStudentFromClass(classId: string, studentId: string): Promi
 }
 
 // Hook to fetch class detail
-export function useClassDetail(classId: string) {
+export function useClassDetail(classId: string, search?: string) {
   return useQuery({
-    queryKey: ['class', classId],
-    queryFn: () => fetchClassDetail(classId),
+    queryKey: ['class', classId, search],
+    queryFn: () => fetchClassDetail(classId, search),
     enabled: !!classId,
   });
 }
@@ -298,6 +302,46 @@ export function useRemoveStudent(classId: string) {
       queryClient.invalidateQueries({ queryKey: ['class', classId] });
       queryClient.invalidateQueries({ queryKey: ['classes'] });
     },
+  });
+}
+
+// Student Classes Hooks
+async function fetchStudentClasses(
+  page: number = 1,
+  pageSize: number = 10,
+  search?: string,
+  sortBy: string = 'created_at'
+): Promise<import('@/types').PaginatedStudentClasses> {
+  const headers = await getAuthHeaders();
+  const params = new URLSearchParams({
+    page: page.toString(),
+    page_size: pageSize.toString(),
+    sort_by: sortBy,
+  });
+  if (search) {
+    params.append('search', search);
+  }
+
+  const response = await fetch(`${API_URL}/api/students/me/classes?${params}`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch student classes');
+  }
+
+  return response.json();
+}
+
+export function useStudentClasses(
+  page: number = 1,
+  pageSize: number = 10,
+  search?: string,
+  sortBy: string = 'created_at'
+) {
+  return useQuery({
+    queryKey: ['student-classes', page, pageSize, search, sortBy],
+    queryFn: () => fetchStudentClasses(page, pageSize, search, sortBy),
   });
 }
 

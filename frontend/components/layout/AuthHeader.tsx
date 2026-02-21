@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/auth-context';
 export default function AuthHeader() {
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -18,9 +19,19 @@ export default function AuthHeader() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <header className="border-b border-gray-800 bg-black shadow-md">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <header className={`fixed top-0 left-0 right-0 z-50 border-b border-gray-800 bg-black/95 backdrop-blur-sm shadow-md transition-all duration-300 ${
+      isScrolled ? 'h-14' : 'h-16'
+    }`}>
+      <div className="container mx-auto flex h-full items-center justify-between px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center space-x-2">
           <span className="text-xl font-bold text-white tracking-tight">
@@ -34,7 +45,9 @@ export default function AuthHeader() {
             onClick={() => setDropdownOpen((prev) => !prev)}
             className="flex items-center space-x-2 text-sm font-medium text-gray-300 hover:text-white transition-colors focus:outline-none"
           >
-            <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center text-black font-semibold text-xs select-none">
+            <div className={`rounded-full bg-white flex items-center justify-center text-black font-semibold text-xs select-none transition-all duration-300 ${
+              isScrolled ? 'h-7 w-7' : 'h-8 w-8'
+            }`}>
               {user?.profile?.first_name?.[0]}{user?.profile?.last_name?.[0]}
             </div>
             <span>{user?.profile?.first_name}</span>

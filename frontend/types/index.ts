@@ -101,3 +101,28 @@ export interface AddStudentsResponse {
   };
 }
 
+// Student Class types
+export interface TeacherInfo {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface StudentClass {
+  id: string;
+  name: string;
+  description: string | null;
+  teacher: TeacherInfo;
+  student_count: number;
+  joined_at: string;
+  created_at: string;
+}
+
+export interface PaginatedStudentClasses {
+  items: StudentClass[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}

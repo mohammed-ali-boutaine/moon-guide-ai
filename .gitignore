@@ -40,3 +40,5 @@ dist/
 *.log
 *.todo
 
+# cache
+/.pytest_cache

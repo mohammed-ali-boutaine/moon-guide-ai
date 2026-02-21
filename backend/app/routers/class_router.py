@@ -103,6 +103,7 @@ async def get_class_detail(
     class_id: UUID,
     current_user: TeacherUser,
     db: Annotated[Session, Depends(get_db)],
+    search: Annotated[str | None, Query(description="Search students by email")] = None,
 ):
     """
     Get detailed information about a specific class.
@@ -112,9 +113,12 @@ async def get_class_detail(
     - List of enrolled students with their profiles
     - Total student count
 
+    Query parameters:
+    - **search**: Optional search term to filter students by email
+
     Only the class owner can access this endpoint.
     """
-    class_obj = ClassService.get_class_by_id(db, class_id, current_user.id)
+    class_obj = ClassService.get_class_by_id(db, class_id, current_user.id, search=search)
 
     if not class_obj:
         raise HTTPException(
