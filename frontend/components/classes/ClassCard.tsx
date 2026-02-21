@@ -1,14 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-
-interface Class {
-  id: string;
-  name: string;
-  description: string;
-  student_count: number;
-  created_at: string;
-}
+import type { Class } from '@/types';
 
 interface ClassCardProps {
   classData: Class;

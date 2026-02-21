@@ -49,11 +49,63 @@ export default function TeacherDashboard() {
     { label: 'Quizzes Created', value: '0', icon: '📝' },
   ];
 
-  const recentStudents = [
-    { name: 'Alice Martin', class: 'Advanced Mathematics', joined: 'Today' },
-    { name: 'Bob Dupont', class: 'Physics & Chemistry', joined: 'Yesterday' },
-    { name: 'Caroline Bernard', class: 'Advanced Mathematics', joined: '2 days ago' },
-  ];
+  interface RecentStudentApi {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    joined_at: string;
+    class_id: string;
+    class_name: string;
+  }
+
+  const [recentStudents, setRecentStudents] = useState<{
+    name: string;
+    class: string;
+    joined: string;
+  }[]>([]);
+
+  useEffect(() => {
+    const fetchRecent = async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/classes/recent-joins?limit=5`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!res.ok) return;
+        const data: RecentStudentApi[] = await res.json();
+
+        const mapped = data.map((s) => {
+          const name = `${s.first_name || ''} ${s.last_name || ''}`.trim() || s.email;
+          const joined = formatJoined(s.joined_at);
+          return { name, class: s.class_name, joined };
+        });
+
+        setRecentStudents(mapped);
+      } catch (err) {
+        console.error('Failed to fetch recent students', err);
+      }
+    };
+
+    // fetch on mount
+    fetchRecent();
+  }, []);
+
+  function formatJoined(iso: string) {
+    try {
+      const d = new Date(iso);
+      const now = new Date();
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const diffDays = Math.floor((now.setHours(0,0,0,0) - new Date(d).setHours(0,0,0,0)) / msPerDay);
+      if (diffDays === 0) return 'Today';
+      if (diffDays === 1) return 'Yesterday';
+      if (diffDays > 1 && diffDays < 7) return `${diffDays} days ago`;
+      return d.toLocaleDateString();
+    } catch (e) {
+      return iso;
+    }
+  }
 
   return (
     <ProtectedRoute allowedRoles={['TEACHER']}>
@@ -199,7 +251,7 @@ export default function TeacherDashboard() {
               </div>
 
               {/* Teacher Profile */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl">
+              {/* <div className="bg-gray-900 border border-gray-800 rounded-xl">
                 <div className="px-6 py-4 border-b border-gray-800">
                   <h2 className="text-lg font-semibold text-gray-100">My Profile</h2>
                 </div>
@@ -220,7 +272,7 @@ export default function TeacherDashboard() {
                     </Link>
                   </div>
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
             </div>

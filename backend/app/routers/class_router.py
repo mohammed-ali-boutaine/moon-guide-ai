@@ -21,6 +21,7 @@ from app.schemas.class_schema import (
     RemoveStudentResponse,
     StudentAddResult,
     StudentInClass,
+    RecentStudent,
 )
 from app.services.class_service import ClassService
 
@@ -425,3 +426,23 @@ async def list_class_students(
         student_list.append(student_data)
 
     return student_list
+
+
+@router.get(
+    "/recent-joins",
+    response_model=list[RecentStudent],
+    summary="Get recent student joins",
+    description="Get recent students who joined any of the authenticated teacher's classes.",
+)
+async def get_recent_joins(
+    current_user: TeacherUser,
+    db: Annotated[Session, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=100, description="Max number of recent records")] = 10,
+):
+    """
+    Return a list of recent student joins across all classes owned by the authenticated teacher.
+
+    - **limit**: Maximum number of records to return (default 10)
+    """
+    results = ClassService.get_recent_students_for_teacher(db, current_user.id, limit=limit)
+    return results

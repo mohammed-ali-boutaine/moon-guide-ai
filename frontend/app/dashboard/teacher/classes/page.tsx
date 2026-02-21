@@ -9,14 +9,7 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui';
 import { useClasses, useCreateClass, useUpdateClass, useDeleteClass } from '@/hooks/use-classes';
-
-interface Class {
-  id: string;
-  name: string;
-  description: string;
-  student_count: number;
-  created_at: string;
-}
+import type { Class } from '@/types';
 
 export default function TeacherClassesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
