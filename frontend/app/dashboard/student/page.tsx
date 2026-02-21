@@ -175,6 +175,33 @@ function StudentDashboardContent() {
 
               {/* Sidebar */}
               <div className="space-y-8">
+                {/* Classmates (dump data) */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl">
+                  <div className="px-6 py-4 border-b border-gray-800">
+                    <h2 className="text-lg font-semibold text-gray-100">Classmates</h2>
+                  </div>
+                  <div className="p-6 space-y-3">
+                    {[
+                      { name: 'Alice Martin', email: 'alice@example.com' },
+                      { name: 'Bob Dupont', email: 'bob@example.com' },
+                      { name: 'Caroline Bernard', email: 'caroline@example.com' },
+                    ].map((c, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white font-medium text-sm">
+                            {c.name.split(' ').map(n => n[0]).join('')}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-200">{c.name}</p>
+                            <p className="text-xs text-gray-500">{c.email}</p>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-400">• Online</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Upcoming Assignments */}
                 <div className="bg-gray-900 border border-gray-800 rounded-xl">
                   <div className="px-6 py-4 border-b border-gray-800">
