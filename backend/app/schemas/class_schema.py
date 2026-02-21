@@ -38,6 +38,20 @@ class StudentInClass(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RecentStudent(BaseModel):
+    """Recently joined student with class info"""
+
+    id: UUID
+    email: str
+    first_name: str
+    last_name: str
+    joined_at: datetime
+    class_id: UUID
+    class_name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Teacher information
 class TeacherInfo(BaseModel):
     """Teacher basic information"""
@@ -134,3 +148,32 @@ class RemoveStudentResponse(BaseModel):
     """Response after removing a student"""
 
     message: str
+
+
+# Batch student management
+class AddStudentsRequest(BaseModel):
+    """Request to add multiple students to a class by email"""
+
+    emails: list[str] = Field(
+        ..., min_length=1, max_length=50, description="List of student email addresses"
+    )
+
+
+class StudentAddResult(BaseModel):
+    """Result of adding a single student in a batch operation"""
+
+    email: str
+    success: bool
+    error: str | None = None
+    student: StudentInClass | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AddStudentsResponse(BaseModel):
+    """Response after adding multiple students"""
+
+    results: list[StudentAddResult]
+    summary: dict[str, int]  # {"total": N, "successful": M, "failed": K}
+
+    model_config = ConfigDict(from_attributes=True)

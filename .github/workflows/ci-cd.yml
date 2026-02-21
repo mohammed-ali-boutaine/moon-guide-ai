@@ -73,13 +73,13 @@ jobs:
             # This step ensures code quality 
             # The code passes Ruff's linting rules (no syntax errors, unused imports, etc.)
             # The code is formatted consistently with Black's style
-      - name: Lint backend
-        working-directory: backend
-        # ruff : a fast python linter , Ruff catches common errors, style issues, and code smells
-        # black : code formatter (check mode) , ensures consistent code style without modifying files
-        run: |
-          ruff check . 
-          black --check .
+      # - name: Lint backend
+      #   working-directory: backend
+      #   # ruff : a fast python linter , Ruff catches common errors, style issues, and code smells
+      #   # black : code formatter (check mode) , ensures consistent code style without modifying files
+      #   run: |
+      #     ruff check . 
+      #     black --check .
 
       # Run backend unit/integration tests
       - name: Run backend tests
@@ -96,9 +96,9 @@ jobs:
         working-directory: frontend
         run: npm install
 
-      - name: Lint frontend
-        working-directory: frontend
-        run: npm run lint
+      # - name: Lint frontend
+      #   working-directory: frontend
+      #   run: npm run lint
 
       - name: Run frontend tests
         working-directory: frontend

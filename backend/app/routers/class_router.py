@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.dependencies.auth import TeacherUser
+from app.core.dependencies import TeacherUser
 from app.schemas.class_schema import (
     AddStudentRequest,
     AddStudentResponse,
+    AddStudentsRequest,
+    AddStudentsResponse,
     ClassCreate,
     ClassDetailResponse,
     ClassListResponse,
@@ -17,7 +19,9 @@ from app.schemas.class_schema import (
     ClassUpdate,
     PaginatedClassResponse,
     RemoveStudentResponse,
+    StudentAddResult,
     StudentInClass,
+    RecentStudent,
 )
 from app.services.class_service import ClassService
 
@@ -100,6 +104,7 @@ async def get_class_detail(
     class_id: UUID,
     current_user: TeacherUser,
     db: Annotated[Session, Depends(get_db)],
+    search: Annotated[str | None, Query(description="Search students by email")] = None,
 ):
     """
     Get detailed information about a specific class.
@@ -109,9 +114,12 @@ async def get_class_detail(
     - List of enrolled students with their profiles
     - Total student count
 
+    Query parameters:
+    - **search**: Optional search term to filter students by email
+
     Only the class owner can access this endpoint.
     """
-    class_obj = ClassService.get_class_by_id(db, class_id, current_user.id)
+    class_obj = ClassService.get_class_by_id(db, class_id, current_user.id, search=search)
 
     if not class_obj:
         raise HTTPException(
@@ -270,6 +278,84 @@ async def add_student_to_class(
     )
 
 
+@router.post(
+    "/{class_id}/students/batch",
+    response_model=AddStudentsResponse,
+    summary="Add multiple students to class",
+    description="Add multiple students to the class by email. Only the class owner can add students.",
+)
+async def add_students_to_class_batch(
+    class_id: UUID,
+    students_data: AddStudentsRequest,
+    current_user: TeacherUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """
+    Add multiple students to the class by their email addresses.
+
+    - **emails**: List of student email addresses
+
+    Validations:
+    - Users must exist and have STUDENT role
+    - Students must not already be enrolled in the class
+    - Only the class owner can add students
+
+    Returns detailed results for each email (success/failure).
+    """
+    results, error = ClassService.add_students_to_class_batch(
+        db, class_id, students_data.emails, current_user.id
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error,
+        )
+
+    # Build response with results
+    student_results = []
+    for result in results:
+        student_result = StudentAddResult(
+            email=result["email"],
+            success=result["success"],
+            error=result["error"],
+            student=(
+                StudentInClass(**result["student_data"])
+                if result["student_data"]
+                else None
+            ),
+        )
+        student_results.append(student_result)
+
+    # Calculate summary
+    successful = sum(1 for r in results if r["success"])
+    failed = len(results) - successful
+
+    response = AddStudentsResponse(
+        results=student_results,
+        summary={
+            "total": len(results),
+            "successful": successful,
+            "failed": failed,
+        },
+    )
+
+    # Return appropriate status code
+    if failed == len(results) and len(results) > 0:
+        # All failed
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to add all students",
+        )
+    elif failed > 0:
+        # Partial success - return 207 Multi-Status
+        # Note: FastAPI doesn't have built-in 207, so we'll use 200 and let the summary indicate partial success
+        return response
+    else:
+        # All successful - return 201
+        return response
+
+
 @router.delete(
     "/{class_id}/students/{student_id}",
     response_model=RemoveStudentResponse,
@@ -340,3 +426,23 @@ async def list_class_students(
         student_list.append(student_data)
 
     return student_list
+
+
+@router.get(
+    "/recent-joins",
+    response_model=list[RecentStudent],
+    summary="Get recent student joins",
+    description="Get recent students who joined any of the authenticated teacher's classes.",
+)
+async def get_recent_joins(
+    current_user: TeacherUser,
+    db: Annotated[Session, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=100, description="Max number of recent records")] = 10,
+):
+    """
+    Return a list of recent student joins across all classes owned by the authenticated teacher.
+
+    - **limit**: Maximum number of records to return (default 10)
+    """
+    results = ClassService.get_recent_students_for_teacher(db, current_user.id, limit=limit)
+    return results

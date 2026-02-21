@@ -1,71 +1,94 @@
-import time
-
-from fastapi import FastAPI, Request
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from contextlib import asynccontextmanager
+from app.core.config import settings  
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from app.db.init_db import init_db  
+from app.core.logging import logger
 from app.api.health import router as health_router
-from app.core.config import settings
-from app.core.logging import setup_logging
-from app.routers import auth_router, class_router, student_router
+from app.routers.auth_router import router as auth_router
+from app.routers.class_router import router as class_router
+from app.routers.student_router import router as student_router
+from app.routers.users_router import router as users_router
+from app.core.database import Base
 
-# Setup logging
-logger = setup_logging(app_name="moon-guide-ai")
-
-app = FastAPI(title="Moon Guide AI API")
-
-
-# Logging middleware
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Middleware to log all incoming requests and responses"""
-    start_time = time.time()
-
-    # Log incoming request
-    logger.info(
-        f"[{request.method}] {request.url.path} - Client: {request.client.host if request.client else 'Unknown'}"
-    )
-
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events"""
+    # Startup
+    logger.info("Starting application...")
     try:
-        response = await call_next(request)
-        duration = time.time() - start_time
-
-        # Log response
-        logger.info(
-            f"[{request.method}] {request.url.path} - "
-            f"Status: {response.status_code} - Duration: {duration:.3f}s"
-        )
-
-        return response
+        init_db()
     except Exception as e:
-        duration = time.time() - start_time
-        logger.error(
-            f"[{request.method}] {request.url.path} - "
-            f"Error: {str(e)} - Duration: {duration:.3f}s",
-            exc_info=True,
-        )
-        raise
+        logger.error(f"Failed to initialize database: {e}")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down application...")
 
 
-# CORS middleware
+# Create FastAPI app instance
+app = FastAPI(
+    title="Moon Guide AI API",
+    description="Backend API for Moon Guide AI",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(health_router, prefix="/api/v1/health", tags=["Health"])
-app.include_router(auth_router.router)
-app.include_router(class_router.router)
-app.include_router(student_router.router)
+# Include routers
+app.include_router(health_router)
+app.include_router(auth_router)
+app.include_router(class_router)
+app.include_router(student_router)
+app.include_router(users_router)
+
+# Create engine
+engine = create_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,  # SQL logging in debug mode
+    pool_pre_ping=True,  # Verify connections before using
+    pool_size=10,
+    max_overflow=20,
+)
+
+# Create SessionLocal class
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-@app.get("/")
-async def root():
-    return {"message": "Moon Guide AI API is running"}
+def get_db():
+    """
+    Database session dependency for FastAPI
+    
+    Usage:
+        @app.get("/items")
+        def get_items(db: Session = Depends(get_db)):
+            ...
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
-@app.get("/health")
-async def health():
-    return {"status": "healthy"}
+def create_tables():
+    """Create all tables in the database"""
+    Base.metadata.create_all(bind=engine)
+    print("Database tables created successfully")
+
+
+def drop_tables():
+    """Drop all tables (use with caution!)"""
+    Base.metadata.drop_all(bind=engine)
+    print(" All tables dropped")

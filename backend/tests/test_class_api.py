@@ -56,10 +56,29 @@ def client():
 
 @pytest.fixture
 def create_token():
-    """Create a valid JWT token for a user"""
+    """Create a valid JWT token for a user with corresponding session record"""
 
-    def _create_token(user_id: uuid.UUID):
-        return create_access_token(data={"sub": str(user_id)})
+    def _create_token(user_id: uuid.UUID, db_session=None):
+        from app.core.security import create_access_token, create_refresh_token
+        from app.models.session import Session
+        from datetime import datetime, timedelta, timezone
+        
+        # Create JWT token
+        access_token = create_access_token(str(user_id))
+        refresh_token = create_refresh_token()
+        
+        # If database session is provided, create session record
+        if db_session:
+            session = Session(
+                user_id=user_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30)
+            )
+            db_session.add(session)
+            db_session.commit()
+        
+        return access_token
 
     return _create_token
 
@@ -178,9 +197,9 @@ def sample_class(db, teacher_user):
 class TestClassCRUD:
     """Test cases for class CRUD operations"""
 
-    def test_create_class(self, client, teacher_user, create_token):
+    def test_create_class(self, client, teacher_user, db, create_token):
         """Test creating a new class"""
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.post(
             "/api/classes",
             json={"name": "Physics 101", "description": "Intro to Physics"},
@@ -189,28 +208,28 @@ class TestClassCRUD:
         assert response.status_code in [201, 501]
 
     def test_list_teacher_classes(
-        self, client, teacher_user, sample_class, create_token
+        self, client, teacher_user, sample_class, db, create_token
     ):
         """Test listing teacher's classes"""
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.get(
             "/api/classes",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code in [200, 501]
 
-    def test_get_class_detail(self, client, teacher_user, sample_class, create_token):
+    def test_get_class_detail(self, client, teacher_user, sample_class, db, create_token):
         """Test getting class details"""
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.get(
             f"/api/classes/{sample_class.id}",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code in [200, 404, 501]
 
-    def test_update_class(self, client, teacher_user, sample_class, create_token):
+    def test_update_class(self, client, teacher_user, sample_class, db, create_token):
         """Test updating a class"""
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.put(
             f"/api/classes/{sample_class.id}",
             json={"name": "Advanced Math"},
@@ -218,9 +237,9 @@ class TestClassCRUD:
         )
         assert response.status_code in [200, 404, 501]
 
-    def test_delete_class(self, client, teacher_user, sample_class, create_token):
+    def test_delete_class(self, client, teacher_user, sample_class, db, create_token):
         """Test deleting a class"""
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.delete(
             f"/api/classes/{sample_class.id}",
             headers={"Authorization": f"Bearer {token}"},
@@ -233,10 +252,10 @@ class TestStudentManagement:
     """Test cases for student management in classes"""
 
     def test_add_student_to_class(
-        self, client, teacher_user, sample_class, student_user, create_token
+        self, client, teacher_user, sample_class, student_user, db, create_token
     ):
         """Test adding a student to a class"""
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.post(
             f"/api/classes/{sample_class.id}/students",
             json={"email": student_user.email},
@@ -258,7 +277,7 @@ class TestStudentManagement:
         db.commit()
 
         # Try to add again
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.post(
             f"/api/classes/{sample_class.id}/students",
             json={"email": student_user.email},
@@ -267,10 +286,10 @@ class TestStudentManagement:
         assert response.status_code in [409, 501]
 
     def test_add_nonexistent_student(
-        self, client, teacher_user, sample_class, create_token
+        self, client, teacher_user, sample_class, db, create_token
     ):
         """Test adding a student that doesn't exist"""
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.post(
             f"/api/classes/{sample_class.id}/students",
             json={"email": "nonexistent@example.com"},
@@ -292,7 +311,7 @@ class TestStudentManagement:
         db.commit()
 
         # Remove student
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.delete(
             f"/api/classes/{sample_class.id}/students/{student_user.id}",
             headers={"Authorization": f"Bearer {token}"},
@@ -320,7 +339,7 @@ class TestStudentManagement:
             db.add(class_student)
         db.commit()
 
-        token = create_token(teacher_user.id)
+        token = create_token(teacher_user.id, db)
         response = client.get(
             f"/api/classes/{sample_class.id}/students",
             headers={"Authorization": f"Bearer {token}"},
@@ -345,7 +364,7 @@ class TestStudentView:
         db.add(class_student)
         db.commit()
 
-        token = create_token(student_user.id)
+        token = create_token(student_user.id, db)
         response = client.get(
             "/api/students/me/classes",
             headers={"Authorization": f"Bearer {token}"},
@@ -365,7 +384,7 @@ class TestStudentView:
         db.add(class_student)
         db.commit()
 
-        token = create_token(student_user.id)
+        token = create_token(student_user.id, db)
         response = client.get(
             "/api/students/me/classes?search=Math",
             headers={"Authorization": f"Bearer {token}"},

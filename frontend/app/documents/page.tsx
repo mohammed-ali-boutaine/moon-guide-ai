@@ -10,57 +10,57 @@ export default function DocumentsPage() {
   return (
     <div className="container py-12">
       <div className="mb-8">
-        <h1 className="mb-2 text-4xl font-bold">Mes Documents</h1>
-        <p className="text-gray-600">
-          Gérez vos documents d&apos;apprentissage et accédez à vos cours
+        <h1 className="mb-2 text-4xl font-bold text-gray-100">My Documents</h1>
+        <p className="text-gray-400">
+          Manage your learning materials and access your courses
         </p>
       </div>
 
       <div className="mb-6 flex justify-end">
-        <Button>+ Ajouter un document</Button>
+        <Button>+ Add Document</Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card hover>
+        <Card hover className="bg-gray-900 border-gray-800">
           <CardHeader>
-            <CardTitle className="text-lg">Introduction à React</CardTitle>
+            <CardTitle className="text-lg text-gray-100">Introduction to React</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="mb-4 text-sm text-gray-600">
-              Cours complet sur les bases de React et les composants
+            <p className="mb-4 text-sm text-gray-400">
+              Complete course on React fundamentals and components
             </p>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Il y a 2 jours</span>
+              <span className="text-xs text-gray-500">2 days ago</span>
               <Button size="sm" variant="ghost">
-                Ouvrir
+                Open
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card hover>
+        <Card hover className="bg-gray-900 border-gray-800">
           <CardHeader>
-            <CardTitle className="text-lg">Algorithmes avancés</CardTitle>
+            <CardTitle className="text-lg text-gray-100">Advanced Algorithms</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="mb-4 text-sm text-gray-600">
-              Structures de données et algorithmes de tri
+            <p className="mb-4 text-sm text-gray-400">
+              Data structures and sorting algorithms
             </p>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Il y a 1 semaine</span>
+              <span className="text-xs text-gray-500">1 week ago</span>
               <Button size="sm" variant="ghost">
-                Ouvrir
+                Open
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-dashed" hover>
+        <Card className="border-dashed border-gray-700 bg-gray-900" hover>
           <CardContent className="flex h-full min-h-[200px] items-center justify-center">
             <div className="text-center">
-              <p className="mb-2 text-gray-500">Aucun autre document</p>
+              <p className="mb-2 text-gray-500">No other documents</p>
               <Button variant="outline" size="sm">
-                Ajouter un document
+                Add Document
               </Button>
             </div>
           </CardContent>

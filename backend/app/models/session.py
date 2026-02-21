@@ -23,7 +23,7 @@ class Session(Base):
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     refresh_token: Mapped[str] = mapped_column(String(2048), unique=True)
-    access_token: Mapped[str] = mapped_column(String(2048), unique=True)
+    access_token: Mapped[str] = mapped_column(String(2048))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

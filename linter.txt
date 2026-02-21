@@ -1,7 +1,0 @@
-Ruff : Linter	The editor who checks for grammar, logic, and unused variables.
-Black : Formatter	The typographer who ensures every page has the same margins and fonts.
-
-
-
-ruff check . --fix
-black .

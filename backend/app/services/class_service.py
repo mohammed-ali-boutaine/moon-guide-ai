@@ -92,15 +92,16 @@ class ClassService:
 
     @staticmethod
     def get_class_by_id(
-        db: Session, class_id: UUID, teacher_id: UUID | None = None
+        db: Session, class_id: UUID, teacher_id: UUID | None = None, search: str | None = None
     ) -> Class | None:
         """
-        Get a class by ID, optionally verifying ownership
+        Get a class by ID, optionally verifying ownership and filtering students by email
 
         Args:
             db: Database session
             class_id: Class ID
             teacher_id: Optional teacher ID to verify ownership
+            search: Optional search term to filter students by email
 
         Returns:
             Class if found and owned by teacher, None otherwise
@@ -110,12 +111,31 @@ class ClassService:
         if teacher_id:
             query = query.where(Class.teacher_id == teacher_id)
 
-        query = query.options(
-            selectinload(Class.class_students).joinedload(ClassStudent.class_),
-            selectinload(Class.students).joinedload(User.profile),
-        )
+        # Load students with profile, and filter by email if search is provided
+        if search:
+            query = query.options(
+                selectinload(Class.class_students),
+                selectinload(Class.students)
+                .joinedload(User.profile)
+                .load_only()  # We'll filter students separately
+            )
+        else:
+            query = query.options(
+                selectinload(Class.class_students).joinedload(ClassStudent.class_),
+                selectinload(Class.students).joinedload(User.profile),
+            )
 
         result = db.execute(query).scalar_one_or_none()
+        
+        # Filter students by email if search is provided
+        if result and search:
+            filtered_students = [
+                student for student in result.students
+                if search.lower() in student.email.lower()
+            ]
+            # Replace the students list with filtered results
+            result.students = filtered_students
+        
         return result
 
     @staticmethod
@@ -257,6 +277,115 @@ class ClassService:
             return None, "Error adding student to class"
 
     @staticmethod
+    def add_students_to_class_batch(
+        db: Session, class_id: UUID, emails: list[str], teacher_id: UUID
+    ) -> tuple[list[dict], str | None]:
+        """
+        Add multiple students to a class by email
+
+        Args:
+            db: Database session
+            class_id: Class ID
+            emails: List of student email addresses
+            teacher_id: Teacher ID (for ownership verification)
+
+        Returns:
+            Tuple of (list of results, error message for ownership issues or None)
+            Each result is a dict with: email, success, error, student_data
+        """
+        # Verify class ownership once
+        class_obj = ClassService.get_class_by_id(db, class_id, teacher_id)
+        if not class_obj:
+            return [], "Class not found or you don't have permission"
+
+        results = []
+
+        for email in emails:
+            email = email.strip().lower()
+            if not email:
+                continue
+
+            result = {
+                "email": email,
+                "success": False,
+                "error": None,
+                "student_data": None,
+            }
+
+            # Find student by email
+            student = db.execute(
+                select(User)
+                .where(User.email == email)
+                .options(joinedload(User.role), joinedload(User.profile))
+            ).scalar_one_or_none()
+
+            if not student:
+                result["error"] = f"No user found with email: {email}"
+                results.append(result)
+                continue
+
+            # Verify student role
+            if not student.role or student.role.name != RoleName.STUDENT:
+                result["error"] = "User is not a student"
+                results.append(result)
+                continue
+
+            # Check if student is already in class
+            existing = db.execute(
+                select(ClassStudent).where(
+                    ClassStudent.class_id == class_id,
+                    ClassStudent.student_id == student.id,
+                )
+            ).scalar_one_or_none()
+
+            if existing:
+                result["error"] = "Student is already enrolled in this class"
+                results.append(result)
+                continue
+
+            # Add student to class
+            try:
+                class_student = ClassStudent(
+                    class_id=class_id, student_id=student.id
+                )
+                db.add(class_student)
+                db.commit()
+                db.refresh(class_student)
+
+                # Load the relationship data
+                db.refresh(student)
+
+                # Build student data response
+                result["success"] = True
+                result["student_data"] = {
+                    "id": student.id,
+                    "email": student.email,
+                    "first_name": (
+                        student.profile.first_name if student.profile else ""
+                    ),
+                    "last_name": student.profile.last_name if student.profile else "",
+                    "joined_at": class_student.joined_at,
+                }
+
+                logger.info(f"Student {student.email} added to class {class_id}")
+            except IntegrityError as e:
+                db.rollback()
+                logger.warning(
+                    f"Integrity error adding student {email} to class: {str(e)}"
+                )
+                result["error"] = "Error adding student to class"
+            except Exception as e:
+                db.rollback()
+                logger.error(
+                    f"Error adding student {email} to class: {str(e)}", exc_info=True
+                )
+                result["error"] = "Error adding student to class"
+
+            results.append(result)
+
+        return results, None
+
+    @staticmethod
     def remove_student_from_class(
         db: Session, class_id: UUID, student_id: UUID, teacher_id: UUID
     ) -> tuple[bool, str | None]:
@@ -335,6 +464,7 @@ class ClassService:
         skip: int = 0,
         limit: int = 10,
         search: str | None = None,
+        sort_by: str = "created_at",
     ) -> tuple[list[Class], int]:
         """
         Get all classes a student is enrolled in
@@ -345,6 +475,7 @@ class ClassService:
             skip: Number of records to skip
             limit: Maximum number of records to return
             search: Optional search term for class name
+            sort_by: Sort field (created_at or name)
 
         Returns:
             Tuple of (list of classes, total count)
@@ -364,16 +495,17 @@ class ClassService:
         count_query = select(func.count()).select_from(query.subquery())
         total = db.execute(count_query).scalar_one()
 
+        # Apply sorting
+        if sort_by == "name":
+            query = query.order_by(Class.name.asc())
+        else:
+            query = query.order_by(Class.created_at.desc())
+
         # Get paginated results with related data
-        query = (
-            query.options(
-                joinedload(Class.teacher).joinedload(User.profile),
-                selectinload(Class.class_students),
-            )
-            .order_by(Class.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
+        query = query.options(
+            joinedload(Class.teacher).joinedload(User.profile),
+            selectinload(Class.class_students),
+        ).offset(skip).limit(limit)
 
         classes = db.execute(query).scalars().unique().all()
         return list(classes), total
@@ -399,3 +531,52 @@ class ClassService:
         ).scalar_one_or_none()
 
         return class_student.joined_at if class_student else None
+
+    @staticmethod
+    def get_recent_students_for_teacher(
+        db: Session, teacher_id: UUID, limit: int = 10
+    ) -> list[dict]:
+        """
+        Get recent students who joined any class owned by the teacher.
+
+        Args:
+            db: Database session
+            teacher_id: Teacher ID
+            limit: Maximum number of records to return
+
+        Returns:
+            List of dicts with student and class join info
+        """
+        query = (
+            select(User, ClassStudent.joined_at, Class.id.label("class_id"), Class.name.label("class_name"))
+            .join(ClassStudent, ClassStudent.student_id == User.id)
+            .join(Class, Class.id == ClassStudent.class_id)
+            .where(Class.teacher_id == teacher_id)
+            .order_by(ClassStudent.joined_at.desc())
+            .limit(limit)
+            .options(joinedload(User.profile))
+        )
+
+        rows = db.execute(query).all()
+
+        results: list[dict] = []
+        for row in rows:
+            # row is a Row mapping: (User, joined_at, class_id, class_name)
+            user = row[0]
+            joined_at = row[1]
+            class_id = row[2]
+            class_name = row[3]
+
+            results.append(
+                {
+                    "id": user.id,
+                    "email": user.email,
+                    "first_name": user.profile.first_name if getattr(user, "profile", None) else "",
+                    "last_name": user.profile.last_name if getattr(user, "profile", None) else "",
+                    "joined_at": joined_at,
+                    "class_id": class_id,
+                    "class_name": class_name,
+                }
+            )
+
+        return results
