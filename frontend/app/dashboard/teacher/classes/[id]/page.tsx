@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useClassDetail, useRemoveStudent } from '@/hooks/use-classes';
@@ -19,8 +19,21 @@ function ClassDetailContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
-  const { data: classDetail, isLoading, error } = useClassDetail(classId, searchQuery || undefined);
+  // Debounce search query with timer
+  useEffect(() => {
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      setIsSearching(false);
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const { data: classDetail, isLoading, error } = useClassDetail(classId, debouncedSearchQuery || undefined);
   const { mutate: removeStudent } = useRemoveStudent(classId);
 
   const handleRemoveStudent = (studentId: string) => {
@@ -253,7 +266,7 @@ function ClassDetailContent() {
         </div>
 
         {/* Students Section */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 relative">
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-2xl font-bold text-white">Students</h2>
@@ -300,11 +313,19 @@ function ClassDetailContent() {
             </div>
           </div>
 
-          <StudentTable
-            students={classDetail.students}
-            onRemove={handleRemoveStudent}
-            isLoading={false}
-          />
+          <div className="relative">
+            <StudentTable
+              students={classDetail.students}
+              onRemove={handleRemoveStudent}
+              isLoading={false}
+            />
+            
+            {(isLoading || isSearching) && (
+              <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center backdrop-blur-sm z-10">
+                <LoadingSpinner size="md" />
+              </div>
+            )}
+          </div>
         </div>
           </div>
         </main>
