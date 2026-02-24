@@ -32,12 +32,19 @@ class Settings(BaseSettings):
     # Environment
     ENV: str = "development"
     
+    # Google SSO
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_CLIENT_ID: str = ""
+
+    # Backend_URL
+    BACKEND_URL: str = "http://localhost:8000"
+
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
     )
-
 
 @lru_cache
 def get_settings() -> Settings:
