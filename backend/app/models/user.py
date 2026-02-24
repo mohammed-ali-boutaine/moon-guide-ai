@@ -4,13 +4,13 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, func, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.class_ import Class
     from app.models.role import Role
     from app.models.session import Session
     from app.models.user_profile import UserProfile
@@ -20,10 +20,10 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     email: Mapped[str] = mapped_column(String(255), unique=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
@@ -38,7 +38,7 @@ class User(Base):
     )
 
     role_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("roles.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
@@ -50,4 +50,12 @@ class User(Base):
     )
     sessions: Mapped[list["Session"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    taught_classes: Mapped[list["Class"]] = relationship(
+        back_populates="teacher", cascade="all, delete-orphan"
+    )
+    enrolled_classes: Mapped[list["Class"]] = relationship(
+        secondary="class_students",
+        back_populates="students",
+        overlaps="class_students,class_",
     )
