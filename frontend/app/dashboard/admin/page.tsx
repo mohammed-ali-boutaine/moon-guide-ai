@@ -3,15 +3,16 @@
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useAuth } from '@/contexts/auth-context';
 import Link from 'next/link';
+import { UsersIcon, BookIcon, DocumentIcon, ChartIcon, CogIcon, HeadsetIcon } from '@/components/ui/icons';
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
 
   const stats = [
-    { label: 'Users', value: '1,234', icon: '👥', change: '+12%' },
-    { label: 'Teachers', value: '56', icon: '👨‍🏫', change: '+5%' },
-    { label: 'Students', value: '1,178', icon: '👨‍🎓', change: '+15%' },
-    { label: 'Classes', value: '89', icon: '📚', change: '+8%' },
+    { label: 'Users', value: '1,234', icon: <UsersIcon className="w-8 h-8" />, change: '+12%' },
+    { label: 'Teachers', value: '56', icon: <UsersIcon className="w-8 h-8" />, change: '+5%' },
+    { label: 'Students', value: '1,178', icon: <UsersIcon className="w-8 h-8" />, change: '+15%' },
+    { label: 'Classes', value: '89', icon: <BookIcon className="w-8 h-8" />, change: '+8%' },
   ];
 
   const recentActivities = [
@@ -59,7 +60,7 @@ export default function AdminDashboard() {
                     <p className="text-sm font-medium text-gray-400">{stat.label}</p>
                     <p className="text-3xl font-bold text-gray-100 mt-1">{stat.value}</p>
                   </div>
-                  <span className="text-3xl">{stat.icon}</span>
+                  <div className="text-gray-600">{stat.icon}</div>
                 </div>
                 <div className="mt-4 flex items-center text-sm">
                   <span className="text-green-400 font-medium">{stat.change}</span>
@@ -78,27 +79,27 @@ export default function AdminDashboard() {
                 </div>
                 <div className="p-6 grid grid-cols-2 md:grid-cols-3 gap-4">
                   <Link href="/admin/users" className="flex flex-col items-center p-4 bg-blue-950/50 border border-blue-900/50 rounded-xl hover:bg-blue-950 transition-colors">
-                    <span className="text-2xl mb-2">👥</span>
+                    <UsersIcon className="w-8 h-8 mb-2 text-blue-400" />
                     <span className="text-sm font-medium text-blue-300">Manage Users</span>
                   </Link>
                   <Link href="/admin/classes" className="flex flex-col items-center p-4 bg-green-950/50 border border-green-900/50 rounded-xl hover:bg-green-950 transition-colors">
-                    <span className="text-2xl mb-2">📚</span>
+                    <BookIcon className="w-8 h-8 mb-2 text-green-400" />
                     <span className="text-sm font-medium text-green-300">Manage Classes</span>
                   </Link>
                   <Link href="/admin/content" className="flex flex-col items-center p-4 bg-yellow-950/50 border border-yellow-900/50 rounded-xl hover:bg-yellow-950 transition-colors">
-                    <span className="text-2xl mb-2">📄</span>
+                    <DocumentIcon className="w-8 h-8 mb-2 text-yellow-400" />
                     <span className="text-sm font-medium text-yellow-300">Content</span>
                   </Link>
                   <Link href="/admin/analytics" className="flex flex-col items-center p-4 bg-purple-950/50 border border-purple-900/50 rounded-xl hover:bg-purple-950 transition-colors">
-                    <span className="text-2xl mb-2">📊</span>
+                    <ChartIcon className="w-8 h-8 mb-2 text-purple-400" />
                     <span className="text-sm font-medium text-purple-300">Analytics</span>
                   </Link>
                   <Link href="/admin/settings" className="flex flex-col items-center p-4 bg-gray-800/50 border border-gray-700/50 rounded-xl hover:bg-gray-800 transition-colors">
-                    <span className="text-2xl mb-2">⚙️</span>
+                    <CogIcon className="w-8 h-8 mb-2 text-gray-400" />
                     <span className="text-sm font-medium text-gray-300">Settings</span>
                   </Link>
                   <Link href="/admin/support" className="flex flex-col items-center p-4 bg-red-950/50 border border-red-900/50 rounded-xl hover:bg-red-950 transition-colors">
-                    <span className="text-2xl mb-2">🎧</span>
+                    <HeadsetIcon className="w-8 h-8 mb-2 text-red-400" />
                     <span className="text-sm font-medium text-red-300">Support</span>
                   </Link>
                 </div>
