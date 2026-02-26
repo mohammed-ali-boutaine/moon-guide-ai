@@ -23,6 +23,7 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<boolean>;
+  refreshUser: () => Promise<void>;
 }
 
 interface RegisterData {
@@ -44,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUser = useCallback(async (accessToken: string) => {
     try {
-      const response = await fetch(`${API_URL}/users/me`, {
+      const response = await fetch(`${API_URL}/api/users/me`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },
@@ -175,6 +176,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshUser = useCallback(async () => {
+    const accessToken = localStorage.getItem('access_token');
+    if (accessToken) {
+      await fetchUser(accessToken);
+    }
+  }, [fetchUser]);
+
   const logout = async () => {
     const refreshTokenValue = localStorage.getItem('refresh_token');
     if (refreshTokenValue) {
@@ -205,6 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         logout,
         refreshToken,
+        refreshUser,
       }}
     >
       {children}
