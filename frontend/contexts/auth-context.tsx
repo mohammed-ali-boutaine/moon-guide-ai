@@ -2,6 +2,9 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AuthContext');
 
 interface User {
   id: string;
@@ -22,6 +25,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refreshToken: () => Promise<boolean>;
   refreshUser: () => Promise<void>;
 }
@@ -43,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const fetchUser = useCallback(async (accessToken: string) => {
+  const fetchUser = useCallback(async (accessToken: string): Promise<User | null> => {
     try {
       const response = await fetch(`${API_URL}/api/users/me`, {
         headers: {
@@ -52,14 +56,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (response.ok) {
-        const userData = await response.json();
+        const userData: User = await response.json();
         setUser(userData);
-        return true;
+        log.debug('User fetched', { id: userData.id, role: userData.role });
+        return userData;
       }
-      return false;
+      log.warn('fetchUser: non-ok response', { status: response.status });
+      return null;
     } catch (error) {
-      console.error('Failed to fetch user:', error);
-      return false;
+      log.error('Failed to fetch user', error);
+      return null;
     }
   }, [API_URL]);
 
@@ -77,11 +83,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem('access_token', data.access_token);
+        log.debug('Token refreshed');
         return true;
       }
+      log.warn('Token refresh failed', { status: response.status });
       return false;
     } catch (error) {
-      console.error('Token refresh failed:', error);
+      log.error('Token refresh error', error);
       return false;
     }
   }, [API_URL]);
@@ -90,8 +98,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initAuth = async () => {
       const accessToken = localStorage.getItem('access_token');
       if (accessToken) {
-        const success = await fetchUser(accessToken);
-        if (!success) {
+        const userData = await fetchUser(accessToken);
+        if (!userData) {
           const refreshed = await refreshToken();
           if (refreshed) {
             const newToken = localStorage.getItem('access_token');
@@ -99,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else {
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
+            log.info('Session expired — cleared tokens');
           }
         }
       }
@@ -111,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
+      log.info('Login attempt', { email });
       const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,24 +128,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Login failed');
+        const errorBody = await response.json().catch(() => ({}));
+        log.warn('Login failed', { status: response.status, detail: errorBody.detail });
+
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('Invalid email or password. Please try again.');
+        } else if (response.status === 422) {
+          throw new Error('Please enter a valid email and password.');
+        } else if (response.status === 429) {
+          throw new Error('Too many login attempts. Please wait a moment and try again.');
+        } else {
+          throw new Error(errorBody.detail || 'Login failed. Please try again.');
+        }
       }
 
       const data = await response.json();
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('refresh_token', data.refresh_token);
 
-      await fetchUser(data.access_token);
+      // Single fetch to get user data + redirect without extra round-trip
+      const userData = await fetchUser(data.access_token);
+      log.info('Login successful', { role: userData?.role });
 
-      // Redirect based on role
-      const userData = await fetch(`${API_URL}/users/me`, {
-        headers: { 'Authorization': `Bearer ${data.access_token}` },
-      }).then(r => r.json());
-
-      if (userData.role === 'ADMIN') {
+      if (userData?.role === 'ADMIN') {
         router.push('/dashboard/admin');
-      } else if (userData.role === 'TEACHER') {
+      } else if (userData?.role === 'TEACHER') {
         router.push('/dashboard/teacher');
       } else {
         router.push('/dashboard/student');
@@ -148,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (data: RegisterData) => {
     setIsLoading(true);
     try {
+      log.info('Register attempt', { email: data.email, role: data.role });
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -155,8 +173,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Registration failed');
+        const error = await response.json().catch(() => ({}));
+        log.warn('Register failed', { status: response.status });
+        if (response.status === 409) {
+          throw new Error('An account with this email already exists.');
+        }
+        throw new Error(error.detail || 'Registration failed. Please try again.');
       }
 
       const result = await response.json();
@@ -164,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('refresh_token', result.refresh_token);
 
       await fetchUser(result.access_token);
+      log.info('Register successful');
 
       // Redirect based on role
       if (data.role === 'TEACHER') {
@@ -192,8 +215,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: refreshTokenValue }),
         });
+        log.info('Logout successful');
       } catch (error) {
-        console.error('Logout error:', error);
+        log.error('Logout error', error);
       }
     }
 
@@ -201,6 +225,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('refresh_token');
     setUser(null);
     router.push('/login');
+  };
+
+  const deleteAccount = async () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) throw new Error('Not authenticated');
+
+    log.warn('Delete account requested');
+    const response = await fetch(`${API_URL}/api/users/me`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      log.error('Delete account failed', { status: response.status });
+      throw new Error(err.detail || 'Failed to delete account. Please try again.');
+    }
+
+    log.info('Account deleted');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    setUser(null);
+    router.push('/');
   };
 
   return (
@@ -212,6 +259,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         register,
         logout,
+        deleteAccount,
         refreshToken,
         refreshUser,
       }}

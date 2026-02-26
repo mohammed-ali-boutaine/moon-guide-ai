@@ -2,7 +2,7 @@
 
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useAuth } from '@/contexts/auth-context';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
+
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { BookIcon, UsersIcon, DocumentIcon, QuizIcon, ChartIcon, CalendarIcon, TargetIcon } from '@/components/ui/icons';
@@ -19,8 +19,6 @@ export default function TeacherDashboard() {
   const { user } = useAuth();
   const [classes, setClasses] = useState<Class[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -110,25 +108,8 @@ export default function TeacherDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={['TEACHER']}>
-      <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle
-            isOpen={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-
-          {/* Sidebar */}
-          <Sidebar 
-            isOpen={isSidebarOpen} 
-            onClose={() => setIsSidebarOpen(false)} 
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-
-          {/* Main Content */}
-          <main className="flex-1 lg:ml-0">          
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="bg-[#0a0a0f]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Welcome */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-100">
@@ -276,8 +257,6 @@ export default function TeacherDashboard() {
               </div> */}
             </div>
           </div>
-            </div>
-          </main>
         </div>
       </div>
     </ProtectedRoute>

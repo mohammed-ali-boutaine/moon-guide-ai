@@ -69,11 +69,11 @@ export default function Header() {
                 className="flex items-center space-x-2 text-sm font-medium text-gray-300 hover:text-white transition-colors focus:outline-none"
               >
                 {user?.profile?.avatar_url ? (
-                  <img
-                    src={user.profile.avatar_url}
-                    alt="avatar"
-                    className="h-8 w-8 rounded-full object-cover ring-2 ring-gray-700"
-                  />
+                   <img
+                  src={`${process.env.NEXT_PUBLIC_API_URL}${user.profile.avatar_url}`}
+                  alt="avatar"
+                  className="h-8 w-8 rounded-full object-cover ring-2 ring-gray-700"
+                />
                 ) : (
                   <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center text-black font-semibold text-xs select-none">
                     {user?.profile?.first_name?.[0]}{user?.profile?.last_name?.[0]}

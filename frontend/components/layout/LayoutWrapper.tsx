@@ -1,8 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { usePathname } from 'next/navigation';
-import { PublicHeader, AuthHeader, Footer } from '@/components/layout';
+import { usePathname, useRouter } from 'next/navigation';
+import { PublicHeader, AuthHeader, Footer, Sidebar, MobileSidebarToggle } from '@/components/layout';
 
 interface LayoutWrapperProps {
   children: React.ReactNode;
@@ -11,6 +12,16 @@ interface LayoutWrapperProps {
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const { isAuthenticated, isLoading } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Redirect from home to dashboard when authenticated
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && pathname === '/') {
+      router.push('/dashboard');
+    }
+  }, [isLoading, isAuthenticated, pathname, router]);
 
   // Show loading state while checking auth
   if (isLoading) {
@@ -36,11 +47,23 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
     );
   }
 
-  // Authenticated layout (sidebar pages handle their own sidebar)
+  // Authenticated layout — global sidebar shared across all auth pages
   return (
     <>
       <AuthHeader />
-      <main className="flex-1 pt-16">{children}</main>
+      <div className="flex flex-1 pt-16">
+        <MobileSidebarToggle
+          isOpen={isSidebarOpen}
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        />
+        <Sidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+          collapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        />
+        <main className="flex-1 min-w-0">{children}</main>
+      </div>
     </>
   );
 }

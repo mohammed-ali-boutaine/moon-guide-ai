@@ -4,6 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { GoogleLoginButton } from '@/components/auth/GoogleLoginButton';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('LoginPage');
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -14,11 +17,14 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    log.debug('Login form submitted');
 
     try {
       await login(email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const message = err instanceof Error ? err.message : 'An error occurred. Please try again.';
+      log.warn('Login form error', { message });
+      setError(message);
     }
   };
 
