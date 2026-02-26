@@ -1,6 +1,7 @@
 # app/schemas/auth.py
 from app.models.role import RoleName
-from pydantic import BaseModel, EmailStr ,Field
+from pydantic import BaseModel, EmailStr, Field
+from typing import Optional
 
 
 class RegisterRequest(BaseModel):
@@ -10,6 +11,13 @@ class RegisterRequest(BaseModel):
     last_name: str = Field(..., min_length=1, max_length=100)
     role: RoleName = RoleName.STUDENT  # Default to student
 
+
+class UserProfileUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    display_name: Optional[str] = None
+    old_password: Optional[str] = None
+    new_password: Optional[str] = Field(None, min_length=8)
 
 class UserResponse(BaseModel):
     id: str
