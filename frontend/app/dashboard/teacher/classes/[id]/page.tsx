@@ -8,7 +8,7 @@ import { StudentTable, AddStudentModal } from '@/components/classes';
 import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { ProtectedRoute } from '@/components/auth';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
+
 
 function ClassDetailContent() {
   const params = useParams();
@@ -16,8 +16,6 @@ function ClassDetailContent() {
   const classId = params.id as string;
 
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -48,7 +46,7 @@ function ClassDetailContent() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen bg-[#0a0a0f]">
+      <div className="flex justify-center items-center h-64 bg-[#0a0a0f]">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -56,39 +54,21 @@ function ClassDetailContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle
-            isOpen={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-
-          {/* Sidebar */}
-          <Sidebar 
-            isOpen={isSidebarOpen} 
-            onClose={() => setIsSidebarOpen(false)} 
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-
-          <main className="flex-1 lg:ml-0">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
-                <h2 className="text-xl font-semibold text-red-400 mb-2">Error Loading Class</h2>
-                <p className="text-gray-300">
-                  {error instanceof Error ? error.message : 'Failed to load class details'}
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/dashboard/teacher/classes')}
-                  className="mt-4"
-                >
-                  Back to Classes
-                </Button>
-              </div>
-            </div>
-          </main>
+      <div className="bg-[#0a0a0f]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-red-400 mb-2">Error Loading Class</h2>
+            <p className="text-gray-300">
+              {error instanceof Error ? error.message : 'Failed to load class details'}
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => router.push('/dashboard/teacher/classes')}
+              className="mt-4"
+            >
+              Back to Classes
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -96,60 +76,26 @@ function ClassDetailContent() {
 
   if (!classDetail) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle
-            isOpen={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-
-          {/* Sidebar */}
-          <Sidebar 
-            isOpen={isSidebarOpen} 
-            onClose={() => setIsSidebarOpen(false)} 
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-
-          <main className="flex-1 lg:ml-0">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
-                <h2 className="text-xl font-semibold text-gray-300 mb-2">Class Not Found</h2>
-                <p className="text-gray-400 mb-4">The class you're looking for doesn't exist or you don't have access to it.</p>
-                <Button
-                  variant="primary"
-                  onClick={() => router.push('/dashboard/teacher/classes')}
-                >
-                  Back to Classes
-                </Button>
-              </div>
-            </div>
-          </main>
+      <div className="bg-[#0a0a0f]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
+            <h2 className="text-xl font-semibold text-gray-300 mb-2">Class Not Found</h2>
+            <p className="text-gray-400 mb-4">The class you're looking for doesn't exist or you don't have access to it.</p>
+            <Button
+              variant="primary"
+              onClick={() => router.push('/dashboard/teacher/classes')}
+            >
+              Back to Classes
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f]">
-      <div className="flex">
-        {/* Mobile Sidebar Toggle */}
-        <MobileSidebarToggle
-          isOpen={isSidebarOpen}
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
-
-        {/* Sidebar */}
-        <Sidebar 
-          isOpen={isSidebarOpen} 
-          onClose={() => setIsSidebarOpen(false)} 
-          collapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
-
-        <main className="flex-1 lg:ml-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{/* Breadcrumb */}
+    <div className="bg-[#0a0a0f]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{/* Breadcrumb */}
         <nav className="mb-6 text-sm">
           <ol className="flex items-center space-x-2 text-gray-400">
             <li>
@@ -327,8 +273,6 @@ function ClassDetailContent() {
             )}
           </div>
         </div>
-          </div>
-        </main>
       </div>
 
       {/* Add Student Modal */}

@@ -87,8 +87,15 @@ export default function ProfilePage() {
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Reject folder selections: folders appear as empty files with no MIME type
+    if (file.size === 0 && !file.type) {
+      setError('Please select an image file, not a folder.');
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+      return;
+    }
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file (JPEG, PNG, or GIF).');
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
       return;
     }
     log.debug('Avatar file selected', { name: file.name, size: file.size });
@@ -216,7 +223,7 @@ export default function ProfilePage() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN', 'TEACHER', 'STUDENT']}>
-      <div className="min-h-screen bg-[#0a0a0f]">
+      <div className="bg-[#0a0a0f] min-h-full">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           {/* Success banner */}
           {saveSuccess && (
@@ -245,7 +252,7 @@ export default function ProfilePage() {
                   <div className="relative shrink-0 group">
                     {(avatarPreview || profile.profile?.avatar_url) ? (
                       <img
-                        src={avatarPreview ?? profile.profile!.avatar_url!}
+                        src={avatarPreview ?? `${process.env.NEXT_PUBLIC_API_URL}${profile.profile!.avatar_url!}`}
                         alt="Avatar"
                         className="h-24 w-24 rounded-full object-cover ring-4 ring-gray-800"
                       />
@@ -266,7 +273,7 @@ export default function ProfilePage() {
                       type="file"
                       accept="image/jpeg,image/png,image/gif,image/webp"
                       multiple={false}
-                      className="hidden"
+                      className="sr-only"
                       onChange={handleAvatarChange}
                     />
                     <button

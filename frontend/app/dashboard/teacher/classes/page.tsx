@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/protected-route';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
+
 import ClassCard from '@/components/classes/ClassCard';
 import ClassForm from '@/components/classes/ClassForm';
 import Modal from '@/components/ui/Modal';
@@ -12,8 +12,6 @@ import { useClasses, useCreateClass, useUpdateClass, useDeleteClass } from '@/ho
 import type { Class } from '@/types';
 
 export default function TeacherClassesPage() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [deletingClassId, setDeletingClassId] = useState<string | null>(null);
@@ -55,25 +53,8 @@ export default function TeacherClassesPage() {
 
   return (
     <ProtectedRoute allowedRoles={['TEACHER']}>
-      <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle
-            isOpen={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-
-          {/* Sidebar */}
-          <Sidebar 
-            isOpen={isSidebarOpen} 
-            onClose={() => setIsSidebarOpen(false)} 
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-
-          {/* Main Content */}
-          <main className="flex-1 lg:ml-0">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="bg-[#0a0a0f]">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
                 <div>
@@ -174,8 +155,6 @@ export default function TeacherClassesPage() {
                   )}
                 </>
               )}
-            </div>
-          </main>
         </div>
 
         {/* Create Class Modal */}

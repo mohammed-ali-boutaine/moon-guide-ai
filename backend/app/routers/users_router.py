@@ -31,7 +31,7 @@ async def upload_avatar(
     ):
     """Upload avatar for current user"""
     # validate file type
-    if file.content_type not in ["image/jpeg", "image/png", "image/gif"]:
+    if file.content_type not in ["image/jpeg", "image/png", "image/gif", "image/webp"]:
         raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG, PNG, and GIF are allowed.")
 
     # generate unique file name
