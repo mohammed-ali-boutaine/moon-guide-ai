@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.class_ import Class
     from app.models.role import Role
     from app.models.session import Session
+    from app.models.user_activity import UserActivity
     from app.models.user_profile import UserProfile
 
 
@@ -49,6 +50,9 @@ class User(Base):
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
     sessions: Mapped[list["Session"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    activities: Mapped[list["UserActivity"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     taught_classes: Mapped[list["Class"]] = relationship(
