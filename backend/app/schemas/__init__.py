@@ -1,0 +1,1 @@
+# They define the shape of the data coming in (request) and going out (response).

@@ -1,20 +1,16 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from contextlib import asynccontextmanager
-from app.core.config import settings  
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.db.init_db import init_db  
-from app.core.logging import logger
-from app.api.health import router as health_router
-from app.routers.auth_router import router as auth_router
-from app.routers.class_router import router as class_router
-from app.routers.student_router import router as student_router
-from app.routers.users_router import router as users_router
-from app.routers.activity_router import router as activity_router
-from app.routers.admin_router import router as admin_router
-from app.core.database import Base
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.api.v1.api import api_router
+from app.core.config import settings
+from app.core.database import Base
+from app.core.logging import logger
+from app.db.init_db import init_db
 
 
 @asynccontextmanager
@@ -53,14 +49,14 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Include routers
-app.include_router(health_router)
-app.include_router(auth_router)
-app.include_router(class_router)
-app.include_router(student_router)
-app.include_router(users_router)
-app.include_router(activity_router)
-app.include_router(admin_router)
+
+@app.get("/health", tags=["health"])
+def health_check():
+    return {"status": "healthy"}
+
+
+# Mount all v1 routes
+app.include_router(api_router)
 
 # Create engine
 engine = create_engine(

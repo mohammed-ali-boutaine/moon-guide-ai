@@ -40,18 +40,7 @@ def get_db():
 
 
 def create_tables():
-    """Create all tables in the database"""
-    # Import all models here to register them with Base
-    # from app.models import (  # noqa: F401
-    #     Role,
-    #     RoleName,
-    #     Session,
-    #     User,
-    #     UserProfile,
-    #     Class,
-    #     ClassStudent,
-    # )
-    
+    """Create all tables in the database"""    
     Base.metadata.create_all(bind=engine)
     print("✅ Database tables created successfully")
 

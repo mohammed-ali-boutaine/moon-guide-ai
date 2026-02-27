@@ -8,10 +8,10 @@ class Settings(BaseSettings):
 
     
     # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/dbname"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/moon_guide"
     
     # Security
-    SECRET_KEY: str = "your-secret-key-change-in-production-min-32-chars"
+    SECRET_KEY: str = "secret_key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7

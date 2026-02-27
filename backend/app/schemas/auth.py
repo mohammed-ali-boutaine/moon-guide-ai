@@ -15,7 +15,6 @@ class RegisterRequest(BaseModel):
 class UserProfileUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    display_name: Optional[str] = None
     old_password: Optional[str] = None
     new_password: Optional[str] = Field(None, min_length=8)
 
