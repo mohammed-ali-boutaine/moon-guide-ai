@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 def test_refresh_token_success(client: TestClient, auth_headers):
     """Test successful token refresh"""
     response = client.post(
-        "/auth/refresh",
+        "/api/auth/refresh",
         json={
             "refresh_token": auth_headers["refresh_token"]
         }
@@ -24,7 +24,7 @@ def test_refresh_token_success(client: TestClient, auth_headers):
 def test_refresh_with_invalid_token(client: TestClient, setup_roles):
     """Test refresh with invalid refresh token"""
     response = client.post(
-        "/auth/refresh",
+        "/api/auth/refresh",
         json={
             "refresh_token": "invalid-token-string"
         }
@@ -46,7 +46,7 @@ def test_refresh_with_revoked_token(client: TestClient, auth_headers, db_session
     db_session.commit()
     
     response = client.post(
-        "/auth/refresh",
+        "/api/auth/refresh",
         json={
             "refresh_token": auth_headers["refresh_token"]
         }
@@ -57,6 +57,7 @@ def test_refresh_with_revoked_token(client: TestClient, auth_headers, db_session
 
 def test_refresh_updates_access_token(client: TestClient, auth_headers, db_session):
     """Test that refresh updates the access token in database"""
+    import time
     from app.models.session import Session
     
     old_session = db_session.query(Session).filter(
@@ -64,8 +65,11 @@ def test_refresh_updates_access_token(client: TestClient, auth_headers, db_sessi
     ).first()
     old_access_token = old_session.access_token
     
+    # Wait 1 second so new JWT has a different iat/exp timestamp
+    time.sleep(1)
+    
     response = client.post(
-        "/auth/refresh",
+        "/api/auth/refresh",
         json={
             "refresh_token": auth_headers["refresh_token"]
         }

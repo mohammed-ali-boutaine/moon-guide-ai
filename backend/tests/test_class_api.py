@@ -13,9 +13,12 @@ from app.models.class_student import ClassStudent
 from app.models.role import Role, RoleName
 from app.models.user import User
 from app.models.user_profile import UserProfile
+from app.models.session import Session as SessionModel  # explicit import
 from app.utils.jwt import create_access_token
 
-# Create in-memory SQLite for testing
+# Create in-memory SQLite for testing – StaticPool ensures all connections
+# share the same in-memory database so data written in one session is visible
+# to another (needed for session-based auth checks).
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
 engine = create_engine(
@@ -24,18 +27,6 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-# Override the get_db dependency
-def override_get_db():
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
 
 
 @pytest.fixture(scope="function")
@@ -49,35 +40,43 @@ def db():
 
 
 @pytest.fixture
-def client():
-    """Create a test client"""
-    return TestClient(app)
+def client(db):
+    """Create a test client that shares the same DB session as the db fixture."""
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture
 def create_token():
-    """Create a valid JWT token for a user with corresponding session record"""
+    """Create a valid JWT token for a user with a corresponding session record."""
 
     def _create_token(user_id: uuid.UUID, db_session=None):
         from app.core.security import create_access_token, create_refresh_token
-        from app.models.session import Session
         from datetime import datetime, timedelta, timezone
-        
+
         # Create JWT token
         access_token = create_access_token(str(user_id))
         refresh_token = create_refresh_token()
-        
-        # If database session is provided, create session record
-        if db_session:
-            session = Session(
+
+        # Always create session record so auth middleware can find it
+        if db_session is not None:
+            session = SessionModel(
                 user_id=user_id,
                 access_token=access_token,
                 refresh_token=refresh_token,
-                expires_at=datetime.now(timezone.utc) + timedelta(days=30)
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
             )
             db_session.add(session)
             db_session.commit()
-        
+
         return access_token
 
     return _create_token

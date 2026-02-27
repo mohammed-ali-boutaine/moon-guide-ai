@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 def test_login_success(client: TestClient, test_user):
     """Test successful login"""
     response = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "testuser@example.com",
             "password": "Test123456"
@@ -23,7 +23,7 @@ def test_login_success(client: TestClient, test_user):
 def test_login_wrong_password(client: TestClient, test_user):
     """Test login with incorrect password"""
     response = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "testuser@example.com",
             "password": "WrongPassword123"
@@ -37,7 +37,7 @@ def test_login_wrong_password(client: TestClient, test_user):
 def test_login_nonexistent_user(client: TestClient, setup_roles):
     """Test login with non-existent email"""
     response = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "nonexistent@example.com",
             "password": "SomePassword123"
@@ -51,7 +51,7 @@ def test_login_nonexistent_user(client: TestClient, setup_roles):
 def test_login_inactive_user(client: TestClient, inactive_user):
     """Test login with inactive account"""
     response = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "inactive@example.com",
             "password": "Test123456"
@@ -65,7 +65,7 @@ def test_login_inactive_user(client: TestClient, inactive_user):
 def test_login_missing_credentials(client: TestClient):
     """Test login with missing credentials"""
     response = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={}
     )
     
@@ -82,7 +82,7 @@ def test_login_creates_session(client: TestClient, test_user, db_session):
     ).count()
     
     response = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "testuser@example.com",
             "password": "Test123456"
