@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # App
-    APP_NAME: str = "Education Platform API"
+    APP_NAME: str = "Moon Guide AI"
     DEBUG: bool = False
     VERSION: str = "1.0.0"
     

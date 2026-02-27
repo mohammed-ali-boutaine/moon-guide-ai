@@ -3,14 +3,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/protected-route';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
 import { LoadingSpinner } from '@/components/ui';
 import { useStudentClasses } from '@/hooks/use-classes';
 import type { StudentClass } from '@/types';
 
 function StudentClassesContent() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('created_at');
 
@@ -23,20 +21,6 @@ function StudentClassesContent() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
-      <div className="flex">
-        {/* Mobile Sidebar Toggle */}
-        <MobileSidebarToggle
-          isOpen={isSidebarOpen}
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
-
-        {/* Sidebar */}
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          collapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
 
         {/* Main Content */}
         <main className="flex-1 lg:ml-0">
@@ -137,7 +121,6 @@ function StudentClassesContent() {
             )}
           </div>
         </main>
-      </div>
     </div>
   );
 }
