@@ -6,10 +6,10 @@ from fastapi.testclient import TestClient
 def test_access_protected_endpoint_with_valid_token(client: TestClient, auth_headers):
     """Test accessing protected endpoint with valid token"""
     response = client.get(
-        "/users/me",
+        "/api/users/me",
         headers={"Authorization": auth_headers["Authorization"]}
     )
-    
+     
     assert response.status_code == 200
     data = response.json()
     assert data["email"] == "testuser@example.com"
@@ -17,36 +17,35 @@ def test_access_protected_endpoint_with_valid_token(client: TestClient, auth_hea
 
 def test_access_protected_endpoint_without_token(client: TestClient):
     """Test accessing protected endpoint without token"""
-    response = client.get("/users/me")
+    response = client.get("/api/users/me")
     
-    assert response.status_code == 403  # HTTPBearer returns 403
+    assert response.status_code == 401  # No credentials → 401 Unauthorized
 
 
 def test_access_protected_endpoint_with_invalid_token(client: TestClient):
     """Test accessing protected endpoint with invalid token"""
     response = client.get(
-        "/users/me",
+        "/api/users/me",
         headers={"Authorization": "Bearer invalid-token-here"}
     )
     
     assert response.status_code == 401
 
 
-def test_access_protected_endpoint_with_expired_token(client: TestClient, db_session):
+def test_access_protected_endpoint_with_expired_token(client: TestClient):
     """Test accessing protected endpoint with expired token"""
-    from datetime import datetime, timedelta, timezone
-    from app.utils.jwt import create_access_token
-    from app.models.user import User
-    
-    # Create an expired token
-    user = db_session.query(User).first()
+    import uuid
+    from datetime import timedelta
+    from app.core.security import create_access_token
+
+    # Use a random UUID — the token is expired so auth fails before any DB lookup
     expired_token = create_access_token(
-        str(user.id),
+        str(uuid.uuid4()),
         expires_delta=timedelta(minutes=-30)  # Already expired
     )
     
     response = client.get(
-        "/users/me",
+        "/api/users/me",
         headers={"Authorization": f"Bearer {expired_token}"}
     )
     
@@ -66,7 +65,7 @@ def test_access_with_revoked_session(client: TestClient, auth_headers, db_sessio
     db_session.commit()
     
     response = client.get(
-        "/users/me",
+        "/api/users/me",
         headers={"Authorization": auth_headers["Authorization"]}
     )
     

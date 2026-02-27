@@ -81,15 +81,10 @@ export default function AdminDashboard() {
   const [creating, setCreating] = useState(false);
   const [adminForm, setAdminForm] = useState({ email: '', password: '', first_name: '', last_name: '' });
 
-  const authHeader = () => {
-    const t = localStorage.getItem('access_token');
-    return { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' };
-  };
-
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/stats`, { headers: authHeader() });
+      const res = await fetch(`${API_URL}/api/admin/stats`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load stats');
       setStats(await res.json());
     } catch {
@@ -104,7 +99,7 @@ export default function AdminDashboard() {
     try {
       const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
       if (roleFilter !== 'ALL') params.set('role', roleFilter);
-      const res = await fetch(`${API_URL}/api/admin/users?${params}`, { headers: authHeader() });
+      const res = await fetch(`${API_URL}/api/admin/users?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load users');
       const data = await res.json();
       setUsers(data.items);
@@ -121,7 +116,7 @@ export default function AdminDashboard() {
 
   const handleExport = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/users/export`, { headers: authHeader() });
+      const res = await fetch(`${API_URL}/api/admin/users/export`, { credentials: 'include' });
       if (!res.ok) throw new Error('Export failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -141,7 +136,8 @@ export default function AdminDashboard() {
     try {
       const res = await fetch(`${API_URL}/api/admin/users/admin`, {
         method: 'POST',
-        headers: authHeader(),
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(adminForm),
       });
       if (!res.ok) {
@@ -163,7 +159,8 @@ export default function AdminDashboard() {
   const handleToggleActive = async (userId: string) => {
     try {
       const res = await fetch(`${API_URL}/api/admin/users/${userId}/toggle-active`, {
-        method: 'PATCH', headers: authHeader(),
+        method: 'PATCH',
+        credentials: 'include',
       });
       if (!res.ok) throw new Error();
       const data = await res.json();

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { GoogleLoginButton } from '@/components/auth/GoogleLoginButton';
 import { createLogger } from '@/lib/logger';
+import { useSearchParams } from 'next/navigation';
 
 const log = createLogger('LoginPage');
 
@@ -13,6 +14,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login, isLoading } = useAuth();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect') ?? undefined;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +23,7 @@ export default function LoginPage() {
     log.debug('Login form submitted');
 
     try {
-      await login(email, password);
+      await login(email, password, redirectTo);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred. Please try again.';
       log.warn('Login form error', { message });

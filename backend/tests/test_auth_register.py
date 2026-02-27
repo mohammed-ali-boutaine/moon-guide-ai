@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 def test_register_success(client: TestClient, setup_roles):
     """Test successful user registration"""
     response = client.post(
-        "/auth/register",
+        "/api/auth/register",
         json={
             "email": "newuser@example.com",
             "password": "SecurePass123",
@@ -26,7 +26,7 @@ def test_register_success(client: TestClient, setup_roles):
 def test_register_duplicate_email(client: TestClient, test_user):
     """Test registration with existing email fails"""
     response = client.post(
-        "/auth/register",
+        "/api/auth/register",
         json={
             "email": "testuser@example.com",  # Already exists
             "password": "SecurePass123",
@@ -43,7 +43,7 @@ def test_register_duplicate_email(client: TestClient, test_user):
 def test_register_invalid_email(client: TestClient, setup_roles):
     """Test registration with invalid email format"""
     response = client.post(
-        "/auth/register",
+        "/api/auth/register",
         json={
             "email": "notanemail",
             "password": "SecurePass123",
@@ -59,7 +59,7 @@ def test_register_invalid_email(client: TestClient, setup_roles):
 def test_register_short_password(client: TestClient, setup_roles):
     """Test registration with password too short"""
     response = client.post(
-        "/auth/register",
+        "/api/auth/register",
         json={
             "email": "newuser@example.com",
             "password": "short",  # Less than 8 characters
@@ -75,7 +75,7 @@ def test_register_short_password(client: TestClient, setup_roles):
 def test_register_missing_fields(client: TestClient, setup_roles):
     """Test registration with missing required fields"""
     response = client.post(
-        "/auth/register",
+        "/api/auth/register",
         json={
             "email": "newuser@example.com",
             "password": "SecurePass123",
@@ -89,7 +89,7 @@ def test_register_missing_fields(client: TestClient, setup_roles):
 def test_register_teacher_role(client: TestClient, setup_roles):
     """Test registration with teacher role"""
     response = client.post(
-        "/auth/register",
+        "/api/auth/register",
         json={
             "email": "newteacher@example.com",
             "password": "SecurePass123",
@@ -107,7 +107,7 @@ def test_register_teacher_role(client: TestClient, setup_roles):
 def test_register_invalid_role(client: TestClient, setup_roles):
     """Test registration with invalid role"""
     response = client.post(
-        "/auth/register",
+        "/api/auth/register",
         json={
             "email": "newuser@example.com",
             "password": "SecurePass123",

@@ -24,9 +24,8 @@ export function useUserActivity() {
   return useQuery<Activity[]>({
     queryKey: ['user-activity'],
     queryFn: async () => {
-      const token = localStorage.getItem('access_token');
       const res = await fetch(`${API_URL}/api/users/me/activity`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to fetch activity');
       return res.json();

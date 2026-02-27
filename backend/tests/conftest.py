@@ -16,7 +16,9 @@ from app.core.security import hash_password
 from app.models import ( 
     Role,
     RoleName,
+    Session,
     User,
+    UserActivity,
     UserProfile,
     Class,
     ClassStudent,
@@ -293,7 +295,7 @@ def student_user(db_session: Session, setup_roles):
 def auth_headers(client: TestClient, test_user):
     """Get authentication headers for test user."""
     response = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "testuser@example.com",
             "password": "Test123456"
@@ -310,7 +312,7 @@ def auth_headers(client: TestClient, test_user):
 def teacher_auth_headers(client: TestClient, teacher_user):
     """Get authentication headers for teacher user."""
     response = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "teacher@example.com",
             "password": "Teacher123456"
@@ -327,7 +329,7 @@ def teacher_auth_headers(client: TestClient, teacher_user):
 def admin_auth_headers(client: TestClient, admin_user):
     """Get authentication headers for admin user."""
     response = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "admin@example.com",
             "password": "Admin123456"

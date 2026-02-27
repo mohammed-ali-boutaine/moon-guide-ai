@@ -55,9 +55,8 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       try {
         log.info('Fetching profile');
-        const token = localStorage.getItem('access_token');
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
         });
         if (response.ok) {
           const data: UserProfile = await response.json();
@@ -111,12 +110,11 @@ export default function ProfilePage() {
     setError('');
     log.info('Uploading avatar');
     try {
-      const token = localStorage.getItem('access_token');
       const formPayload = new FormData();
       formPayload.append('file', file);
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me/avatar`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
         body: formPayload,
       });
       if (response.ok) {
@@ -156,11 +154,10 @@ export default function ProfilePage() {
     }
 
     try {
-      const token = localStorage.getItem('access_token');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`, {
         method: 'PUT',
+        credentials: 'include',
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),

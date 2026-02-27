@@ -22,7 +22,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -47,12 +47,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const fetchUser = useCallback(async (accessToken: string): Promise<User | null> => {
+  /** Fetch current user using httpOnly cookie (no Authorization header needed). */
+  const fetchUser = useCallback(async (): Promise<User | null> => {
     try {
       const response = await fetch(`${API_URL}/api/users/me`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
+        credentials: 'include', // sends httpOnly access_token cookie
       });
 
       if (response.ok) {
@@ -60,6 +59,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userData);
         log.debug('User fetched', { id: userData.id, role: userData.role });
         return userData;
+      }
+
+      // 401/403 means session is invalid – clear user state
+      if (response.status === 401 || response.status === 403) {
+        setUser(null);
       }
       log.warn('fetchUser: non-ok response', { status: response.status });
       return null;
@@ -69,21 +73,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [API_URL]);
 
+  /** Call /refresh – backend reads refresh_token cookie and sets new access_token cookie. */
   const refreshToken = useCallback(async (): Promise<boolean> => {
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (!refreshToken) return false;
-
     try {
       const response = await fetch(`${API_URL}/api/auth/refresh`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
       });
 
       if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('access_token', data.access_token);
-        log.debug('Token refreshed');
+        log.debug('Token refreshed via cookie');
         return true;
       }
       log.warn('Token refresh failed', { status: response.status });
@@ -96,19 +96,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const initAuth = async () => {
-      const accessToken = localStorage.getItem('access_token');
-      if (accessToken) {
-        const userData = await fetchUser(accessToken);
-        if (!userData) {
-          const refreshed = await refreshToken();
-          if (refreshed) {
-            const newToken = localStorage.getItem('access_token');
-            if (newToken) await fetchUser(newToken);
-          } else {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            log.info('Session expired — cleared tokens');
-          }
+      // Try to load user from httpOnly cookie
+      const userData = await fetchUser();
+      if (!userData) {
+        // Cookie may be expired – try refresh
+        const refreshed = await refreshToken();
+        if (refreshed) {
+          await fetchUser();
+        } else {
+          log.info('Session expired or no session found');
         }
       }
       setIsLoading(false);
@@ -117,13 +113,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
   }, [fetchUser, refreshToken]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, redirectTo?: string) => {
     setIsLoading(true);
     try {
       log.info('Login attempt', { email });
       const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // receive httpOnly cookies in response
         body: JSON.stringify({ email, password }),
       });
 
@@ -142,15 +139,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const data = await response.json();
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('refresh_token', data.refresh_token);
-
-      // Single fetch to get user data + redirect without extra round-trip
-      const userData = await fetchUser(data.access_token);
+      // Cookies are set by the server – just fetch the user profile
+      const userData = await fetchUser();
       log.info('Login successful', { role: userData?.role });
 
-      if (userData?.role === 'ADMIN') {
+      // Use redirectTo if provided (e.g. set by middleware), else redirect by role
+      if (redirectTo) {
+        router.push(redirectTo);
+      } else if (userData?.role === 'ADMIN') {
         router.push('/dashboard/admin');
       } else if (userData?.role === 'TEACHER') {
         router.push('/dashboard/teacher');
@@ -169,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // receive httpOnly cookies in response
         body: JSON.stringify(data),
       });
 
@@ -181,11 +178,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(error.detail || 'Registration failed. Please try again.');
       }
 
-      const result = await response.json();
-      localStorage.setItem('access_token', result.access_token);
-      localStorage.setItem('refresh_token', result.refresh_token);
-
-      await fetchUser(result.access_token);
+      // Cookies are set by the server – just fetch the user profile
+      await fetchUser();
       log.info('Register successful');
 
       // Redirect based on role
@@ -200,41 +194,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshUser = useCallback(async () => {
-    const accessToken = localStorage.getItem('access_token');
-    if (accessToken) {
-      await fetchUser(accessToken);
-    }
+    await fetchUser();
   }, [fetchUser]);
 
   const logout = async () => {
-    const refreshTokenValue = localStorage.getItem('refresh_token');
-    if (refreshTokenValue) {
-      try {
-        await fetch(`${API_URL}/api/auth/logout`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshTokenValue }),
-        });
-        log.info('Logout successful');
-      } catch (error) {
-        log.error('Logout error', error);
-      }
+    try {
+      // Backend reads refresh_token cookie and clears both cookies
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      log.info('Logout successful');
+    } catch (error) {
+      log.error('Logout error', error);
     }
 
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
     setUser(null);
     router.push('/login');
   };
 
   const deleteAccount = async () => {
-    const token = localStorage.getItem('access_token');
-    if (!token) throw new Error('Not authenticated');
-
     log.warn('Delete account requested');
     const response = await fetch(`${API_URL}/api/users/me`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -244,8 +228,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     log.info('Account deleted');
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
     setUser(null);
     router.push('/');
   };

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 def test_logout_success(client: TestClient, auth_headers):
     """Test successful logout"""
     response = client.post(
-        "/auth/logout",
+        "/api/auth/logout",
         json={
             "refresh_token": auth_headers["refresh_token"]
         }
@@ -21,7 +21,7 @@ def test_logout_revokes_session(client: TestClient, auth_headers, db_session):
     from app.models.session import Session
     
     response = client.post(
-        "/auth/logout",
+        "/api/auth/logout",
         json={
             "refresh_token": auth_headers["refresh_token"]
         }
@@ -40,7 +40,7 @@ def test_logout_revokes_session(client: TestClient, auth_headers, db_session):
 def test_logout_with_invalid_token(client: TestClient):
     """Test logout with invalid refresh token"""
     response = client.post(
-        "/auth/logout",
+        "/api/auth/logout",
         json={
             "refresh_token": "invalid-token"
         }
@@ -54,7 +54,7 @@ def test_cannot_refresh_after_logout(client: TestClient, auth_headers):
     """Test that refresh token cannot be used after logout"""
     # Logout
     client.post(
-        "/auth/logout",
+        "/api/auth/logout",
         json={
             "refresh_token": auth_headers["refresh_token"]
         }
@@ -62,7 +62,7 @@ def test_cannot_refresh_after_logout(client: TestClient, auth_headers):
     
     # Try to refresh
     response = client.post(
-        "/auth/refresh",
+        "/api/auth/refresh",
         json={
             "refresh_token": auth_headers["refresh_token"]
         }
@@ -77,7 +77,7 @@ def test_logout_all_sessions(client: TestClient, test_user, db_session):
     
     # Create multiple sessions for the user
     login_response1 = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "testuser@example.com",
             "password": "Test123456"
@@ -86,7 +86,7 @@ def test_logout_all_sessions(client: TestClient, test_user, db_session):
     tokens1 = login_response1.json()
     
     login_response2 = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={
             "email": "testuser@example.com",
             "password": "Test123456"
@@ -102,7 +102,7 @@ def test_logout_all_sessions(client: TestClient, test_user, db_session):
     
     # Logout from all devices
     response = client.post(
-        "/auth/logout-all",
+        "/api/auth/logout-all",
         headers={"Authorization": f"Bearer {tokens1['access_token']}"}
     )
     
