@@ -4,6 +4,8 @@ import './globals.css';
 import { AuthProvider } from '@/contexts/auth-context';
 import { QueryProvider } from '@/contexts/query-provider';
 import LayoutWrapper from '@/components/layout/LayoutWrapper';
+import { NotificationProvider } from '@/contexts/notification-context';
+import { ToastContainer } from '@/components/ui/Toast';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -21,11 +23,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="flex min-h-screen flex-col">
-        <QueryProvider>
-          <AuthProvider>
-            <LayoutWrapper>{children}</LayoutWrapper>
-          </AuthProvider>
-        </QueryProvider>
+        <NotificationProvider>
+          <QueryProvider>
+            <AuthProvider>
+              <LayoutWrapper>{children}</LayoutWrapper>
+            </AuthProvider>
+          </QueryProvider>
+          <ToastContainer />
+        </NotificationProvider>
       </body>
     </html>
   );

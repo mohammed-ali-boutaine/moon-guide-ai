@@ -30,6 +30,7 @@ from app.core.dependencies import get_current_user
 from app.models.user_profile import UserProfile
 from app.models.role import Role
 from app.core.logging import logger
+from app.routers.activity_router import log_activity
 
 
 # Initialize SSO (Pull from your config/env)
@@ -150,6 +151,7 @@ async def register(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     credentials: LoginRequest,
+    request: Request,
     db: DBSession = Depends(get_db)
 ):
     """
@@ -204,6 +206,7 @@ async def login(
     
     db.add(session)
     db.commit()
+    log_activity(db, user.id, "login", request)
     
     logger.info(f"User logged in: {user.email}")
     
@@ -340,6 +343,7 @@ async def refresh_access_token(
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout(
+    req: Request,
     request: RefreshTokenRequest,
     db: DBSession = Depends(get_db)
 ):
@@ -353,6 +357,7 @@ async def logout(
     if session:
         session.revoked_at = datetime.now(timezone.utc)
         db.commit()
+        log_activity(db, session.user_id, "logout", req)
         logger.info(f"User logged out: {session.user.email}")
     
     return {"message": "Successfully logged out"}
@@ -360,6 +365,7 @@ async def logout(
 
 @router.post("/logout-all", status_code=status.HTTP_200_OK)
 async def logout_all_sessions(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: DBSession = Depends(get_db)
 ):
@@ -372,6 +378,7 @@ async def logout_all_sessions(
     ).update({"revoked_at": datetime.now(timezone.utc)})
     
     db.commit()
+    log_activity(db, current_user.id, "logout_all", request)
     
     logger.info(f"User logged out from all devices: {current_user.email} ({revoked_count} sessions)")
     

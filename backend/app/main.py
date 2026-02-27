@@ -11,6 +11,8 @@ from app.routers.auth_router import router as auth_router
 from app.routers.class_router import router as class_router
 from app.routers.student_router import router as student_router
 from app.routers.users_router import router as users_router
+from app.routers.activity_router import router as activity_router
+from app.routers.admin_router import router as admin_router
 from app.core.database import Base
 from fastapi.staticfiles import StaticFiles
 
@@ -57,6 +59,8 @@ app.include_router(auth_router)
 app.include_router(class_router)
 app.include_router(student_router)
 app.include_router(users_router)
+app.include_router(activity_router)
+app.include_router(admin_router)
 
 # Create engine
 engine = create_engine(
