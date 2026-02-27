@@ -22,7 +22,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -59,6 +59,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userData);
         log.debug('User fetched', { id: userData.id, role: userData.role });
         return userData;
+      }
+
+      // 401/403 means session is invalid – clear user state
+      if (response.status === 401 || response.status === 403) {
+        setUser(null);
       }
       log.warn('fetchUser: non-ok response', { status: response.status });
       return null;
@@ -108,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
   }, [fetchUser, refreshToken]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, redirectTo?: string) => {
     setIsLoading(true);
     try {
       log.info('Login attempt', { email });
@@ -138,7 +143,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userData = await fetchUser();
       log.info('Login successful', { role: userData?.role });
 
-      if (userData?.role === 'ADMIN') {
+      // Use redirectTo if provided (e.g. set by middleware), else redirect by role
+      if (redirectTo) {
+        router.push(redirectTo);
+      } else if (userData?.role === 'ADMIN') {
         router.push('/dashboard/admin');
       } else if (userData?.role === 'TEACHER') {
         router.push('/dashboard/teacher');

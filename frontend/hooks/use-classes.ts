@@ -19,7 +19,7 @@ const AUTH_FETCH_OPTIONS: RequestInit = {
 };
 
 async function fetchClasses(page: number = 1, pageSize: number = 10, search?: string): Promise<PaginatedClasses> {
-  const headers = await getAuthHeaders();
+  // const headers = await getAuthHeaders();
   const params = new URLSearchParams({
     page: page.toString(),
     page_size: pageSize.toString(),
@@ -195,7 +195,7 @@ export function useDeleteClass() {
 
 // Fetch class detail with students
 async function fetchClassDetail(classId: string, search?: string): Promise<ClassDetail> {
-  const headers = await getAuthHeaders();
+  // const headers = await getAuthHeaders();
   const params = new URLSearchParams();
   if (search) {
     params.append('search', search);
@@ -305,7 +305,7 @@ async function fetchStudentClasses(
   search?: string,
   sortBy: string = 'created_at'
 ): Promise<import('@/types').PaginatedStudentClasses> {
-  const headers = await getAuthHeaders();
+  // const headers = await getAuthHeaders();
   const params = new URLSearchParams({
     page: page.toString(),
     page_size: pageSize.toString(),
