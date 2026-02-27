@@ -10,7 +10,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-
+from sqlalchemy import text
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -25,10 +25,9 @@ role_name_enum = sa.Enum("STUDENT", "TEACHER", "ADMIN", name="role_name")
 
 def upgrade() -> None:
     connection = op.get_bind()
-    type_exists = connection.execute(
-        "SELECT 1 FROM pg_type WHERE typname = 'role_name'"
-    ).scalar()
-
+ 
+    type_exists = connection.execute(text("SELECT 1 FROM pg_type WHERE typname = 'role_name'"))
+    
     if not type_exists:
         op.execute("CREATE TYPE role_name AS ENUM ('STUDENT', 'TEACHER', 'ADMIN')")
 
