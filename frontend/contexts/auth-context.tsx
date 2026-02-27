@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!refreshToken) return false;
 
     try {
-      const response = await fetch(`${API_URL}/auth/refresh`, {
+      const response = await fetch(`${API_URL}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -110,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (data: RegisterData) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/register`, {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -179,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const refreshTokenValue = localStorage.getItem('refresh_token');
     if (refreshTokenValue) {
       try {
-        await fetch(`${API_URL}/auth/logout`, {
+        await fetch(`${API_URL}/api/auth/logout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: refreshTokenValue }),

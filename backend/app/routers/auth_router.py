@@ -1,8 +1,13 @@
 # app/api/routes/auth.py
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session as DBSession
+from urllib.parse import urlencode
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session as DBSession
+from fastapi_sso.sso.google import GoogleSSO
+from app.core.config import settings
+from fastapi import Request
 from app.core.database import get_db
 from app.core.security import (
     verify_password,
@@ -26,7 +31,19 @@ from app.models.user_profile import UserProfile
 from app.models.role import Role
 from app.core.logging import logger
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+
+# Initialize SSO (Pull from your config/env)
+GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET
+
+redirect_url = f"{settings.BACKEND_URL}/api/auth/google/callback"
+sso = GoogleSSO(
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    redirect_uri=redirect_url
+)
+
+
 
 
 # app/api/routes/auth.py
@@ -49,7 +66,7 @@ from app.schemas.auth import (
     AccessTokenResponse,
 )
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -149,6 +166,14 @@ async def login(
             detail="Incorrect email or password"
         )
     
+    # Block password login for Google-only accounts
+    if user.password_hash is None:
+        logger.warning(f"Password login attempted on OAuth-only account: {user.email}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account uses Google Login. Please sign in with Google."
+        )
+    
     # Verify password
     if not verify_password(credentials.password, user.password_hash):
         logger.warning(f"Failed login attempt for user: {credentials.email}")
@@ -186,6 +211,89 @@ async def login(
         access_token=access_token,
         refresh_token=refresh_token
     )
+
+
+# Login with google stuff
+
+
+@router.get("/google/login")
+async def google_login():
+    """Redirects user to Google OAuth2 page"""
+    async with sso:
+        return await sso.get_login_redirect()
+
+@router.get("/google/callback")
+async def google_callback(request: Request, db: DBSession = Depends(get_db)):
+    """Handles the return from Google, creates user if not exists, and redirects with tokens"""
+
+    try:
+        async with sso:
+            google_user = await sso.verify_and_process(request)
+        
+        if not google_user:
+            error_url = f"{settings.FRONTEND_URL}/login?error=google_auth_failed"
+            return RedirectResponse(url=error_url, status_code=302)
+
+        # 1. Check if user already exists
+        user = db.query(User).filter(User.email == google_user.email).first()
+
+        if not user:
+            # 2. Register new user automatically if they don't exist
+            # Default to a 'user' role (adjust based on your Role model)
+            default_role = db.query(Role).filter(Role.name == RoleName.STUDENT).first() 
+            
+            user = User(
+                email=google_user.email,
+                password_hash=None,  # Google users don't have a local password
+                role_id=default_role.id,
+                is_active=True
+            )
+            db.add(user)
+            db.flush()
+
+            profile = UserProfile(
+                user_id=user.id,
+                first_name=google_user.first_name,
+                last_name=google_user.last_name,
+                # google_user.picture can be saved here if your profile model supports it
+            )
+            db.add(profile)
+            logger.info(f"New user registered via Google: {user.email}")
+        
+        # 3. Check if user is active (standard check)
+        if not user.is_active:
+            error_url = f"{settings.FRONTEND_URL}/login?error=account_inactive"
+            return RedirectResponse(url=error_url, status_code=302)
+
+        # 4. Generate tokens using your existing core logic
+        access_token = create_access_token(user.id)
+        refresh_token = create_refresh_token()
+
+        # 5. Create session (Standardizing with your /login flow)
+        new_session = Session(
+            user_id=user.id,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        )
+        db.add(new_session)
+        db.commit()
+
+        # 6. Redirect to frontend callback page with tokens as query parameters
+        callback_url = f"{settings.FRONTEND_URL}/auth/callback"
+        query_params = urlencode({
+            'access_token': access_token,
+            'refresh_token': refresh_token
+        })
+        
+        return RedirectResponse(url=f"{callback_url}?{query_params}", status_code=302)
+        
+    except Exception as e:
+        logger.error(f"OAuth Callback Error: {str(e)}", exc_info=True)
+        error_url = f"{settings.FRONTEND_URL}/login?error=server_error"
+        return RedirectResponse(url=error_url, status_code=302)
+
+
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)
