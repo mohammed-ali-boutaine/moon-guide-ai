@@ -5,6 +5,7 @@ from app.models.session import Session
 from app.models.user import User
 from app.models.user_activity import UserActivity
 from app.models.user_profile import UserProfile
+from app.models.document import Document
 
 __all__ = [
     "Class",
@@ -15,4 +16,5 @@ __all__ = [
     "User",
     "UserActivity",
     "UserProfile",
+    "Document",
 ]
