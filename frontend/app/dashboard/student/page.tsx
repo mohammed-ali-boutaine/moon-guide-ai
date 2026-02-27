@@ -1,9 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useAuth } from '@/contexts/auth-context';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
 import { LoadingSpinner } from '@/components/ui';
 import { useStudentClasses } from '@/hooks/use-classes';
 import Link from 'next/link';
@@ -11,8 +9,6 @@ import { BookIcon, QuizIcon, DocumentIcon, BriefcaseIcon, UserIcon, CheckCircleI
 
 function StudentDashboardContent() {
   const { user } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const { data: classesData, isLoading } = useStudentClasses(1, 4);
 
@@ -43,21 +39,6 @@ function StudentDashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
-      <div className="flex">
-        {/* Mobile Sidebar Toggle */}
-        <MobileSidebarToggle
-          isOpen={isSidebarOpen}
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
-
-        {/* Sidebar */}
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          collapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
-
         {/* Main Content */}
         <main className="flex-1 lg:ml-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -251,7 +232,6 @@ function StudentDashboardContent() {
             </div>
           </div>
         </main>
-      </div>
     </div>
   );
 }

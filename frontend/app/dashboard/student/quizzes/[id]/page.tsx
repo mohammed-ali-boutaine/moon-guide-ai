@@ -2,12 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/auth-context';
-import { useSearchParams } from 'next/navigation';
+
 
 export default function QuizDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
-  const { user } = useAuth();
   const [quiz, setQuiz] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);

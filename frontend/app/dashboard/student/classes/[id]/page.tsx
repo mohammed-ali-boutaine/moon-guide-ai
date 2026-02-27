@@ -1,21 +1,17 @@
 'use client';
 
-import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useStudentClasses } from '@/hooks/use-classes';
 import { LoadingSpinner } from '@/components/ui';
 import Button from '@/components/ui/Button';
 import { ProtectedRoute } from '@/components/auth';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
 
 function StudentClassDetailContent() {
   const params = useParams();
   const router = useRouter();
   const classId = params.id as string;
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Fetch all classes and find the specific one
   // Note: Ideally there would be a dedicated endpoint for student class detail
@@ -34,21 +30,7 @@ function StudentClassDetailContent() {
   if (error) {
     return (
       <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle
-            isOpen={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-
-          {/* Sidebar */}
-          <Sidebar
-            isOpen={isSidebarOpen}
-            onClose={() => setIsSidebarOpen(false)}
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-
+    
           <main className="flex-1 lg:ml-0">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
@@ -66,7 +48,6 @@ function StudentClassDetailContent() {
               </div>
             </div>
           </main>
-        </div>
       </div>
     );
   }
@@ -74,20 +55,7 @@ function StudentClassDetailContent() {
   if (!classDetail) {
     return (
       <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle
-            isOpen={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-
-          {/* Sidebar */}
-          <Sidebar
-            isOpen={isSidebarOpen}
-            onClose={() => setIsSidebarOpen(false)}
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
+     
 
           <main className="flex-1 lg:ml-0">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -102,7 +70,6 @@ function StudentClassDetailContent() {
               </div>
             </div>
           </main>
-        </div>
       </div>
     );
   }
@@ -111,21 +78,7 @@ function StudentClassDetailContent() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
-      <div className="flex">
-        {/* Mobile Sidebar Toggle */}
-        <MobileSidebarToggle
-          isOpen={isSidebarOpen}
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
-
-        {/* Sidebar */}
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          collapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
-
+        
         <main className="flex-1 lg:ml-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Breadcrumb */}
@@ -288,7 +241,6 @@ function StudentClassDetailContent() {
             </div>
           </div>
         </main>
-      </div>
     </div>
   );
 }
