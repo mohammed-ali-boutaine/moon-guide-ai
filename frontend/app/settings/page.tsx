@@ -101,9 +101,9 @@ export default function SettingsPage() {
   const handleLogoutAll = async () => {
     setLoggingOutAll(true);
     try {
-      const token = localStorage.getItem('access_token');
       const res = await fetch(`${API_URL}/api/auth/logout-all`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+        method: 'POST',
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('Request failed');
       success('Signed out from all devices.');

@@ -55,9 +55,8 @@ export default function TeacherStudentsPage() {
   useEffect(() => {
     const fetchClasses = async () => {
       try {
-        const token = localStorage.getItem('access_token');
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/classes?page_size=100`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
         });
         if (res.ok) {
           const data = await res.json();
@@ -76,13 +75,11 @@ export default function TeacherStudentsPage() {
   const fetchStudents = useCallback(async () => {
     setIsLoadingStudents(true);
     try {
-      const token = localStorage.getItem('access_token');
-
       if (selectedClassId === 'all') {
         // Use recent-joins with a high limit to get all students
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/api/classes/recent-joins?limit=200`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { credentials: 'include' }
         );
         if (res.ok) {
           const data: Student[] = await res.json();
@@ -92,7 +89,7 @@ export default function TeacherStudentsPage() {
         // Fetch specific class students via class detail
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/api/classes/${selectedClassId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { credentials: 'include' }
         );
         if (res.ok) {
           const data = await res.json();

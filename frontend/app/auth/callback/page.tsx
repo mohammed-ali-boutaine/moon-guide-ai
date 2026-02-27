@@ -1,29 +1,23 @@
 // app/auth/callback/page.tsx
-'use client'; // This must be a client component to use useEffect and useSearchParams
+'use client';
 
 import { useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function AuthCallbackPage() {
     const router = useRouter();
-    const searchParams = useSearchParams();
+    const { refreshUser } = useAuth();
 
     useEffect(() => {
-        const accessToken = searchParams.get('access_token');
-        const refreshToken = searchParams.get('refresh_token');
-
-        if (accessToken && refreshToken) {
-            // Store tokens exactly as you do in your manual login
-            localStorage.setItem('access_token', accessToken);
-            localStorage.setItem('refresh_token', refreshToken);
-
-            // Redirect to dashboard
+        // Tokens are set as httpOnly cookies by the backend during Google OAuth callback.
+        // Just load the user profile and redirect.
+        const completeLogin = async () => {
+            await refreshUser();
             router.push('/dashboard');
-        } else {
-            // If something went wrong, send them back to login
-            router.push('/login?error=auth_failed');
-        }
-    }, [searchParams, router]);
+        };
+        completeLogin();
+    }, [router, refreshUser]);
 
     return (
         <div className="flex items-center justify-center min-h-screen">

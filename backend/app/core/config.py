@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     
+    # Cookie settings
+    COOKIE_SECURE: bool = False  # True in production (HTTPS only)
+    COOKIE_SAMESITE: str = "lax"  # lax | strict | none
+    COOKIE_HTTPONLY: bool = True
+    ACCESS_TOKEN_COOKIE_NAME: str = "access_token"
+    REFRESH_TOKEN_COOKIE_NAME: str = "refresh_token"
+    
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
     

@@ -15,9 +15,8 @@ export default function QuizDetailPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
-        const token = localStorage.getItem('access_token');
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/students/quizzes`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
         });
         if (!res.ok) return;
         const data = await res.json();
@@ -36,10 +35,10 @@ export default function QuizDetailPage({ params }: { params: { id: string } }) {
     if (!quiz) return;
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('access_token');
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/students/quizzes/${quiz.quiz_id}/submit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ score }),
       });
       if (res.ok) {

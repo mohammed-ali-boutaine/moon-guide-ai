@@ -12,13 +12,11 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const token = localStorage.getItem('access_token');
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': token ? `Bearer ${token}` : '',
-  };
-}
+/** Shared fetch options – auth is handled via httpOnly cookie. */
+const AUTH_FETCH_OPTIONS: RequestInit = {
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+};
 
 async function fetchClasses(page: number = 1, pageSize: number = 10, search?: string): Promise<PaginatedClasses> {
   const headers = await getAuthHeaders();
@@ -31,7 +29,7 @@ async function fetchClasses(page: number = 1, pageSize: number = 10, search?: st
   }
 
   const response = await fetch(`${API_URL}/api/classes?${params}`, {
-    headers,
+    ...AUTH_FETCH_OPTIONS,
   });
 
   if (!response.ok) {
@@ -42,10 +40,9 @@ async function fetchClasses(page: number = 1, pageSize: number = 10, search?: st
 }
 
 async function createClass(data: CreateClassData): Promise<Class> {
-  const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/classes`, {
     method: 'POST',
-    headers,
+    ...AUTH_FETCH_OPTIONS,
     body: JSON.stringify(data),
   });
 
@@ -58,10 +55,9 @@ async function createClass(data: CreateClassData): Promise<Class> {
 }
 
 async function updateClass(id: string, data: UpdateClassData): Promise<Class> {
-  const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/classes/${id}`, {
     method: 'PUT',
-    headers,
+    ...AUTH_FETCH_OPTIONS,
     body: JSON.stringify(data),
   });
 
@@ -74,10 +70,9 @@ async function updateClass(id: string, data: UpdateClassData): Promise<Class> {
 }
 
 async function deleteClass(id: string): Promise<void> {
-  const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/classes/${id}`, {
     method: 'DELETE',
-    headers,
+    ...AUTH_FETCH_OPTIONS,
   });
 
   if (!response.ok) {
@@ -207,7 +202,7 @@ async function fetchClassDetail(classId: string, search?: string): Promise<Class
   }
   const url = `${API_URL}/api/classes/${classId}${search ? `?${params}` : ''}`;
   const response = await fetch(url, {
-    headers,
+    ...AUTH_FETCH_OPTIONS,
   });
 
   if (!response.ok) {
@@ -220,10 +215,9 @@ async function fetchClassDetail(classId: string, search?: string): Promise<Class
 
 // Add multiple students to class
 async function addStudentsToClass(classId: string, emails: string[]): Promise<AddStudentsResponse> {
-  const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/classes/${classId}/students/batch`, {
     method: 'POST',
-    headers,
+    ...AUTH_FETCH_OPTIONS,
     body: JSON.stringify({ emails }),
   });
 
@@ -237,10 +231,9 @@ async function addStudentsToClass(classId: string, emails: string[]): Promise<Ad
 
 // Remove student from class
 async function removeStudentFromClass(classId: string, studentId: string): Promise<void> {
-  const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/classes/${classId}/students/${studentId}`, {
     method: 'DELETE',
-    headers,
+    ...AUTH_FETCH_OPTIONS,
   });
 
   if (!response.ok) {
@@ -323,7 +316,7 @@ async function fetchStudentClasses(
   }
 
   const response = await fetch(`${API_URL}/api/students/me/classes?${params}`, {
-    headers,
+    ...AUTH_FETCH_OPTIONS,
   });
 
   if (!response.ok) {

@@ -23,9 +23,8 @@ export default function TeacherDashboard() {
   useEffect(() => {
     const fetchClasses = async () => {
       try {
-        const token = localStorage.getItem('access_token');
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/classes`, {
-          headers: { 'Authorization': `Bearer ${token}` },
+          credentials: 'include',
         });
         if (response.ok) {
           const data = await response.json();
@@ -67,10 +66,9 @@ export default function TeacherDashboard() {
   useEffect(() => {
     const fetchRecent = async () => {
       try {
-        const token = localStorage.getItem('access_token');
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/api/classes/recent-joins?limit=5`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { credentials: 'include' }
         );
         if (!res.ok) return;
         const data: RecentStudentApi[] = await res.json();

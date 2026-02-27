@@ -1,11 +1,12 @@
-# app/core/dependencies.py (CORRECTED)
-from typing import Annotated
+# app/core/dependencies.py
+from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session as DBSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.logging import logger
 from app.models.role import RoleName
@@ -13,23 +14,34 @@ from app.models.session import Session
 from app.models.user import User
 from app.utils.jwt import verify_token
 
-security = HTTPBearer()
+# auto_error=False allows fallback to cookie-based auth
+security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    request: Request,
     db: Annotated[DBSession, Depends(get_db)],
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)] = None,
 ) -> User:
     """
-    Dependency to get current authenticated user from access token
-    Validates:
-    - Token structure and signature
-    - Token hasn't expired
-    - Session exists and isn't revoked
-    - User exists and is active
+    Dependency to get current authenticated user.
+    Reads access token from:
+    1. httpOnly cookie (browser clients)
+    2. Authorization: Bearer header (API clients / tests)
     """
     try:
-        token = credentials.credentials
+        # 1. Try cookie first
+        token = request.cookies.get(settings.ACCESS_TOKEN_COOKIE_NAME)
+        # 2. Fall back to Bearer header
+        if not token and credentials:
+            token = credentials.credentials
+        # 3. No token found
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
         # Verify JWT token
         payload = verify_token(token)
