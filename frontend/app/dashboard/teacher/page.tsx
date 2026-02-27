@@ -2,9 +2,10 @@
 
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useAuth } from '@/contexts/auth-context';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
+
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { BookIcon, UsersIcon, DocumentIcon, QuizIcon, ChartIcon, CalendarIcon, TargetIcon } from '@/components/ui/icons';
 
 interface Class {
   id: string;
@@ -18,8 +19,6 @@ export default function TeacherDashboard() {
   const { user } = useAuth();
   const [classes, setClasses] = useState<Class[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -43,10 +42,10 @@ export default function TeacherDashboard() {
   }, []);
 
   const stats = [
-    { label: 'My Classes', value: classes.length.toString(), icon: '📚' },
-    { label: 'Total Students', value: classes.reduce((acc, c) => acc + c.student_count, 0).toString(), icon: '👨‍🎓' },
-    { label: 'Documents', value: '0', icon: '📄' },
-    { label: 'Quizzes Created', value: '0', icon: '📝' },
+    { label: 'My Classes', value: classes.length.toString(), icon: <BookIcon className="w-8 h-8" /> },
+    { label: 'Total Students', value: classes.reduce((acc, c) => acc + c.student_count, 0).toString(), icon: <UsersIcon className="w-8 h-8" /> },
+    { label: 'Documents', value: '0', icon: <DocumentIcon className="w-8 h-8" /> },
+    { label: 'Quizzes Created', value: '0', icon: <QuizIcon className="w-8 h-8" /> },
   ];
 
   interface RecentStudentApi {
@@ -109,29 +108,12 @@ export default function TeacherDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={['TEACHER']}>
-      <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle
-            isOpen={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-
-          {/* Sidebar */}
-          <Sidebar 
-            isOpen={isSidebarOpen} 
-            onClose={() => setIsSidebarOpen(false)} 
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-
-          {/* Main Content */}
-          <main className="flex-1 lg:ml-0">          
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="bg-[#0a0a0f]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Welcome */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-100">
-              Hello, {user?.profile?.first_name}! 👋
+              Hello, {user?.profile?.first_name}!
             </h2>
             <p className="text-gray-400 mt-1">
               Manage your classes, students, and teaching content.
@@ -147,7 +129,7 @@ export default function TeacherDashboard() {
                     <p className="text-sm font-medium text-gray-400">{stat.label}</p>
                     <p className="text-3xl font-bold text-gray-100 mt-1">{stat.value}</p>
                   </div>
-                  <span className="text-3xl">{stat.icon}</span>
+                  <div className="text-gray-600">{stat.icon}</div>
                 </div>
               </div>
             ))}
@@ -187,8 +169,8 @@ export default function TeacherDashboard() {
                             <h3 className="font-medium text-gray-100">{cls.name}</h3>
                             <p className="text-sm text-gray-400">{cls.description || 'No description'}</p>
                             <div className="flex items-center mt-2 space-x-4 text-sm text-gray-500">
-                              <span>👨‍🎓 {cls.student_count} students</span>
-                              <span>📅 {new Date(cls.created_at).toLocaleDateString('en-US')}</span>
+                              <span className="flex items-center gap-1"><UsersIcon className="w-4 h-4" /> {cls.student_count} students</span>
+                              <span className="flex items-center gap-1"><CalendarIcon className="w-4 h-4" /> {new Date(cls.created_at).toLocaleDateString('en-US')}</span>
                             </div>
                           </div>
                           <Link href={`/dashboard/teacher/classes/${cls.id}`} className="text-primary-400 hover:text-primary-300 font-medium text-sm">
@@ -208,19 +190,19 @@ export default function TeacherDashboard() {
                 </div>
                 <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                   <Link href="/dashboard/teacher/documents" className="flex flex-col items-center p-4 bg-blue-950/50 border border-blue-900/50 rounded-xl hover:bg-blue-950 transition-colors">
-                    <span className="text-2xl mb-2">📄</span>
+                    <DocumentIcon className="w-8 h-8 mb-2 text-blue-400" />
                     <span className="text-sm font-medium text-blue-300 text-center">Documents</span>
                   </Link>
                   <Link href="/dashboard/teacher/quiz" className="flex flex-col items-center p-4 bg-green-950/50 border border-green-900/50 rounded-xl hover:bg-green-950 transition-colors">
-                    <span className="text-2xl mb-2">📝</span>
+                    <QuizIcon className="w-8 h-8 mb-2 text-green-400" />
                     <span className="text-sm font-medium text-green-300 text-center">Quiz</span>
                   </Link>
                   <Link href="/dashboard/teacher/career" className="flex flex-col items-center p-4 bg-purple-950/50 border border-purple-900/50 rounded-xl hover:bg-purple-950 transition-colors">
-                    <span className="text-2xl mb-2">🎯</span>
+                    <TargetIcon className="w-8 h-8 mb-2 text-purple-400" />
                     <span className="text-sm font-medium text-purple-300 text-center">Career</span>
                   </Link>
                   <Link href="/dashboard/teacher/analytics" className="flex flex-col items-center p-4 bg-yellow-950/50 border border-yellow-900/50 rounded-xl hover:bg-yellow-950 transition-colors">
-                    <span className="text-2xl mb-2">📊</span>
+                    <ChartIcon className="w-8 h-8 mb-2 text-yellow-400" />
                     <span className="text-sm font-medium text-yellow-300 text-center">Analytics</span>
                   </Link>
                 </div>
@@ -275,8 +257,6 @@ export default function TeacherDashboard() {
               </div> */}
             </div>
           </div>
-            </div>
-          </main>
         </div>
       </div>
     </ProtectedRoute>

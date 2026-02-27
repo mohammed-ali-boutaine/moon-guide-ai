@@ -130,7 +130,7 @@ export default function Sidebar({ isOpen = true, onClose, collapsed = false, onT
       <aside
         className={cn(
           'sticky left-0 z-40 bg-gray-900 border-r border-gray-800 transition-all duration-300 ease-in-out flex flex-col',
-          collapsed ? 'w-16' : 'w-64',
+          collapsed ? 'w-16' : 'w-48',
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
           isScrolled ? 'top-14 h-[calc(100vh-3.5rem)]' : 'top-16 h-[calc(100vh-4rem)]'
         )}
@@ -183,13 +183,45 @@ export default function Sidebar({ isOpen = true, onClose, collapsed = false, onT
           })}
         </nav>
 
-        <div className={cn('p-4 border-t border-gray-800', collapsed && 'p-2')}>
+        <div className={cn('border-t border-gray-800', collapsed ? 'p-2' : 'p-4')}>
           {!collapsed ? (
-            <div className="text-xs text-gray-500 text-center">
-              {role.charAt(0) + role.slice(1).toLowerCase()} Portal v1.0
+            <div className="flex items-center gap-3">
+              {user?.profile?.avatar_url ? (
+               <img
+                  src={`${process.env.NEXT_PUBLIC_API_URL}${user.profile.avatar_url}`}
+                  alt="avatar"
+                  className="h-8 w-8 rounded-full object-cover ring-2 ring-gray-700"
+                />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 font-semibold text-xs flex-shrink-0">
+                  {user?.profile?.first_name?.[0]}{user?.profile?.last_name?.[0]}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-200 truncate">
+                  {user?.profile?.first_name} {user?.profile?.last_name}
+                </p>
+                <p className="text-xs text-gray-500 truncate">{role.charAt(0) + role.slice(1).toLowerCase()} Portal</p>
+              </div>
             </div>
           ) : (
-            <div className="w-2 h-2 rounded-full bg-primary-500 mx-auto" title={`${role} Portal`} />
+            <div className="flex justify-center">
+              {user?.profile?.avatar_url ? (
+                <img
+                  src={`${process.env.NEXT_PUBLIC_API_URL}${user.profile.avatar_url}`}
+                  alt="avatar"
+                  className="h-8 w-8 rounded-full object-cover"
+                  title={`${user.profile.first_name} ${user.profile.last_name}`}
+                />
+              ) : (
+                <div
+                  className="h-8 w-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 font-semibold text-xs"
+                  title={`${user?.profile?.first_name} ${user?.profile?.last_name}`}
+                >
+                  {user?.profile?.first_name?.[0]}{user?.profile?.last_name?.[0]}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </aside>

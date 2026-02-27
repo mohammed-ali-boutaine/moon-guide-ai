@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useClassDetail, useRemoveStudent } from '@/hooks/use-classes';
@@ -8,7 +8,7 @@ import { StudentTable, AddStudentModal } from '@/components/classes';
 import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { ProtectedRoute } from '@/components/auth';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
+
 
 function ClassDetailContent() {
   const params = useParams();
@@ -16,11 +16,22 @@ function ClassDetailContent() {
   const classId = params.id as string;
 
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
-  const { data: classDetail, isLoading, error } = useClassDetail(classId, searchQuery || undefined);
+  // Debounce search query with timer
+  useEffect(() => {
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      setIsSearching(false);
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const { data: classDetail, isLoading, error } = useClassDetail(classId, debouncedSearchQuery || undefined);
   const { mutate: removeStudent } = useRemoveStudent(classId);
 
   const handleRemoveStudent = (studentId: string) => {
@@ -35,7 +46,7 @@ function ClassDetailContent() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen bg-[#0a0a0f]">
+      <div className="flex justify-center items-center h-64 bg-[#0a0a0f]">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -43,39 +54,21 @@ function ClassDetailContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle
-            isOpen={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-
-          {/* Sidebar */}
-          <Sidebar 
-            isOpen={isSidebarOpen} 
-            onClose={() => setIsSidebarOpen(false)} 
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-
-          <main className="flex-1 lg:ml-0">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
-                <h2 className="text-xl font-semibold text-red-400 mb-2">Error Loading Class</h2>
-                <p className="text-gray-300">
-                  {error instanceof Error ? error.message : 'Failed to load class details'}
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/dashboard/teacher/classes')}
-                  className="mt-4"
-                >
-                  Back to Classes
-                </Button>
-              </div>
-            </div>
-          </main>
+      <div className="bg-[#0a0a0f]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-red-400 mb-2">Error Loading Class</h2>
+            <p className="text-gray-300">
+              {error instanceof Error ? error.message : 'Failed to load class details'}
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => router.push('/dashboard/teacher/classes')}
+              className="mt-4"
+            >
+              Back to Classes
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -83,60 +76,26 @@ function ClassDetailContent() {
 
   if (!classDetail) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle
-            isOpen={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-
-          {/* Sidebar */}
-          <Sidebar 
-            isOpen={isSidebarOpen} 
-            onClose={() => setIsSidebarOpen(false)} 
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-
-          <main className="flex-1 lg:ml-0">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
-                <h2 className="text-xl font-semibold text-gray-300 mb-2">Class Not Found</h2>
-                <p className="text-gray-400 mb-4">The class you're looking for doesn't exist or you don't have access to it.</p>
-                <Button
-                  variant="primary"
-                  onClick={() => router.push('/dashboard/teacher/classes')}
-                >
-                  Back to Classes
-                </Button>
-              </div>
-            </div>
-          </main>
+      <div className="bg-[#0a0a0f]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
+            <h2 className="text-xl font-semibold text-gray-300 mb-2">Class Not Found</h2>
+            <p className="text-gray-400 mb-4">The class you're looking for doesn't exist or you don't have access to it.</p>
+            <Button
+              variant="primary"
+              onClick={() => router.push('/dashboard/teacher/classes')}
+            >
+              Back to Classes
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f]">
-      <div className="flex">
-        {/* Mobile Sidebar Toggle */}
-        <MobileSidebarToggle
-          isOpen={isSidebarOpen}
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
-
-        {/* Sidebar */}
-        <Sidebar 
-          isOpen={isSidebarOpen} 
-          onClose={() => setIsSidebarOpen(false)} 
-          collapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
-
-        <main className="flex-1 lg:ml-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{/* Breadcrumb */}
+    <div className="bg-[#0a0a0f]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{/* Breadcrumb */}
         <nav className="mb-6 text-sm">
           <ol className="flex items-center space-x-2 text-gray-400">
             <li>
@@ -253,7 +212,7 @@ function ClassDetailContent() {
         </div>
 
         {/* Students Section */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 relative">
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-2xl font-bold text-white">Students</h2>
@@ -300,14 +259,20 @@ function ClassDetailContent() {
             </div>
           </div>
 
-          <StudentTable
-            students={classDetail.students}
-            onRemove={handleRemoveStudent}
-            isLoading={false}
-          />
-        </div>
+          <div className="relative">
+            <StudentTable
+              students={classDetail.students}
+              onRemove={handleRemoveStudent}
+              isLoading={false}
+            />
+            
+            {(isLoading || isSearching) && (
+              <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center backdrop-blur-sm z-10">
+                <LoadingSpinner size="md" />
+              </div>
+            )}
           </div>
-        </main>
+        </div>
       </div>
 
       {/* Add Student Modal */}

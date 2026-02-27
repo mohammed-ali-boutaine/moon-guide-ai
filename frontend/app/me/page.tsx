@@ -1,7 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ProtectedRoute } from '@/components/auth/protected-route';
+import { useAuth } from '@/contexts/auth-context';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ProfilePage');
 
 interface UserProfile {
   id: string;
@@ -23,24 +27,36 @@ const ROLE_STYLES: Record<string, { label: string; classes: string }> = {
 };
 
 export default function ProfilePage() {
-  // const { user, logout } = useAuth();
+  const { refreshUser, deleteAccount } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // Delete account
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
+    old_password: '',
+    new_password: '',
   });
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
+        log.info('Fetching profile');
         const token = localStorage.getItem('access_token');
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/me`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (response.ok) {
@@ -49,11 +65,16 @@ export default function ProfilePage() {
           setFormData({
             first_name: data.profile?.first_name ?? '',
             last_name: data.profile?.last_name ?? '',
+            old_password: '',
+            new_password: '',
           });
+          log.debug('Profile loaded', { id: data.id });
         } else {
+          log.warn('Failed to load profile', { status: response.status });
           setError('Failed to load profile.');
         }
-      } catch {
+      } catch (err) {
+        log.error('Network error loading profile', err);
         setError('Network error. Please try again.');
       } finally {
         setIsLoading(false);
@@ -63,38 +84,126 @@ export default function ProfilePage() {
     fetchProfile();
   }, []);
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reject folder selections: folders appear as empty files with no MIME type
+    if (file.size === 0 && !file.type) {
+      setError('Please select an image file, not a folder.');
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file (JPEG, PNG, or GIF).');
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+      return;
+    }
+    log.debug('Avatar file selected', { name: file.name, size: file.size });
+    const reader = new FileReader();
+    reader.onloadend = () => setAvatarPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleAvatarUpload = async () => {
+    const file = avatarInputRef.current?.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    setError('');
+    log.info('Uploading avatar');
+    try {
+      const token = localStorage.getItem('access_token');
+      const formPayload = new FormData();
+      formPayload.append('file', file);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me/avatar`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formPayload,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProfile((prev) => prev ? { ...prev, profile: prev.profile ? { ...prev.profile, avatar_url: data.avatar_url } : null } : null);
+        setAvatarPreview(null);
+        if (avatarInputRef.current) avatarInputRef.current.value = '';
+        log.info('Avatar uploaded successfully');
+        await refreshUser();
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        log.warn('Avatar upload failed', { status: response.status });
+        setError(err.detail || 'Failed to upload avatar.');
+      }
+    } catch (err) {
+      log.error('Avatar upload error', err);
+      setError('Network error. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     setError('');
 
+    const payload: Record<string, string> = {
+      first_name: formData.first_name,
+      last_name: formData.last_name,
+    };
+    if (formData.new_password) {
+      payload.old_password = formData.old_password;
+      payload.new_password = formData.new_password;
+    }
+
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/me`, {
-        method: 'PATCH',
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`, {
+        method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
-        const updated: UserProfile = await response.json();
-        setProfile(updated);
+        const result = await response.json();
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                profile: prev.profile
+                  ? { ...prev.profile, ...result.profile }
+                  : null,
+              }
+            : null
+        );
         setIsEditing(false);
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
+        setFormData((f) => ({ ...f, old_password: '', new_password: '' }));
       } else {
-        setError('Failed to update profile.');
+        const err = await response.json().catch(() => ({}));
+        setError(err.detail || 'Failed to update profile.');
       }
     } catch {
       setError('Network error. Please try again.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
+    setIsDeleting(true);
+    setDeleteError('');
+    try {
+      log.warn('User confirmed account deletion');
+      await deleteAccount();
+    } catch (err) {
+      log.error('Delete account error', err);
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete account.');
+      setIsDeleting(false);
     }
   };
 
@@ -114,7 +223,7 @@ export default function ProfilePage() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN', 'TEACHER', 'STUDENT']}>
-      <div className="min-h-screen bg-[#0a0a0f]">
+      <div className="bg-[#0a0a0f] min-h-full">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           {/* Success banner */}
           {saveSuccess && (
@@ -140,10 +249,10 @@ export default function ProfilePage() {
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
                 <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                   {/* Avatar */}
-                  <div className="relative shrink-0">
-                    {profile.profile?.avatar_url ? (
+                  <div className="relative shrink-0 group">
+                    {(avatarPreview || profile.profile?.avatar_url) ? (
                       <img
-                        src={profile.profile.avatar_url}
+                        src={avatarPreview ?? `${process.env.NEXT_PUBLIC_API_URL}${profile.profile!.avatar_url!}`}
                         alt="Avatar"
                         className="h-24 w-24 rounded-full object-cover ring-4 ring-gray-800"
                       />
@@ -158,6 +267,22 @@ export default function ProfilePage() {
                       }`}
                       title={profile.is_active ? 'Active' : 'Inactive'}
                     />
+                    {/* Avatar upload controls */}
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      multiple={false}
+                      className="sr-only"
+                      onChange={handleAvatarChange}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium"
+                    >
+                      Change
+                    </button>
                   </div>
 
                   {/* Identity */}
@@ -184,15 +309,27 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {/* Edit toggle */}
-                  {!isEditing && (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="shrink-0 px-5 py-2 bg-gray-800 border border-gray-700 text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-750 hover:border-gray-600 hover:text-gray-100 transition-all"
-                    >
-                      Edit profile
-                    </button>
-                  )}
+                  {/* Avatar upload button + Edit toggle */}
+                  <div className="shrink-0 flex flex-col gap-2">
+                    {avatarPreview && (
+                      <button
+                        type="button"
+                        onClick={handleAvatarUpload}
+                        disabled={avatarUploading}
+                        className="px-5 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-40 transition-all"
+                      >
+                        {avatarUploading ? 'Uploading...' : 'Save avatar'}
+                      </button>
+                    )}
+                    {!isEditing && (
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-5 py-2 bg-gray-800 border border-gray-700 text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-750 hover:border-gray-600 hover:text-gray-100 transition-all"
+                      >
+                        Edit profile
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -230,6 +367,34 @@ export default function ProfilePage() {
                       </div>
                     </div>
 
+                    {/* Password change section */}
+                    <div className="border-t border-gray-800 pt-5">
+                      <h4 className="text-sm font-medium text-gray-400 mb-4">Change Password <span className="text-gray-600 font-normal">(optional)</span></h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Current password</label>
+                          <input
+                            type="password"
+                            value={formData.old_password}
+                            onChange={(e) => setFormData({ ...formData, old_password: e.target.value })}
+                            className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all placeholder:text-gray-500"
+                            placeholder="••••••••"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">New password</label>
+                          <input
+                            type="password"
+                            value={formData.new_password}
+                            onChange={(e) => setFormData({ ...formData, new_password: e.target.value })}
+                            minLength={8}
+                            className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all placeholder:text-gray-500"
+                            placeholder="Min. 8 characters"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex gap-3 pt-2">
                       <button
                         type="submit"
@@ -246,6 +411,8 @@ export default function ProfilePage() {
                           setFormData({
                             first_name: profile.profile?.first_name ?? '',
                             last_name: profile.profile?.last_name ?? '',
+                            old_password: '',
+                            new_password: '',
                           });
                         }}
                         className="px-6 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-750 transition-all"
@@ -288,12 +455,49 @@ export default function ProfilePage() {
                 <p className="text-sm text-gray-500 mb-5">
                   Permanently delete your account and all associated data. This action cannot be undone.
                 </p>
-                <button
-                  type="button"
-                  className="px-5 py-2.5 bg-red-950 border border-red-800 text-red-400 text-sm font-medium rounded-lg hover:bg-red-900/60 hover:text-red-300 transition-all"
-                >
-                  Delete my account
-                </button>
+
+                {!showDeleteConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => { setShowDeleteConfirm(true); setDeleteError(''); }}
+                    className="px-5 py-2.5 bg-red-950 border border-red-800 text-red-400 text-sm font-medium rounded-lg hover:bg-red-900/60 hover:text-red-300 transition-all"
+                  >
+                    Delete my account
+                  </button>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-red-300 font-medium">
+                      To confirm, type <span className="font-mono bg-red-950 px-1 rounded">DELETE</span> below:
+                    </p>
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder="Type DELETE to confirm"
+                      className="w-full max-w-xs px-4 py-2.5 bg-gray-800 border border-red-800 text-gray-100 rounded-lg focus:ring-2 focus:ring-red-700 focus:border-red-600 outline-none transition-all text-sm placeholder:text-gray-600"
+                    />
+                    {deleteError && (
+                      <p className="text-sm text-red-400">{deleteError}</p>
+                    )}
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={handleDeleteAccount}
+                        disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+                        className="px-5 py-2.5 bg-red-700 border border-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      >
+                        {isDeleting ? 'Deleting...' : 'Confirm deletion'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeleteError(''); }}
+                        className="px-5 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-750 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

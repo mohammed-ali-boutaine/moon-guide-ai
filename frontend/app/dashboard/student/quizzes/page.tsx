@@ -3,8 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/protected-route';
-import { useAuth } from '@/contexts/auth-context';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
+
 
 interface AssignedQuiz {
   id: string;
@@ -16,9 +15,7 @@ interface AssignedQuiz {
 }
 
 export default function StudentQuizzesPage() {
-  const { user } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
 
   // Dump data (no backend)
   const [quizzes] = useState<AssignedQuiz[]>([
@@ -29,14 +26,7 @@ export default function StudentQuizzesPage() {
 
   return (
     <ProtectedRoute allowedRoles={["STUDENT"]}>
-      <div className="min-h-screen bg-[#0a0a0f]">
-        <div className="flex">
-          {/* Mobile Sidebar Toggle */}
-          <MobileSidebarToggle isOpen={isSidebarOpen} onClick={() => setIsSidebarOpen(!isSidebarOpen)} />
-
-          {/* Sidebar */}
-          <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} collapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
-
+      <div className="min-h-screen bg-[#0a0a0f]">      
           <main className="flex-1 lg:ml-0">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -82,7 +72,6 @@ export default function StudentQuizzesPage() {
               </div>
             </div>
           </main>
-        </div>
       </div>
     </ProtectedRoute>
   );

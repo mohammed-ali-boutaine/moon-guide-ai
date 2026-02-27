@@ -33,7 +33,7 @@ export default function AuthHeader() {
     }`}>
       <div className="container mx-auto flex h-full items-center justify-between px-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center space-x-2">
+        <Link href="/dashboard" className="flex items-center space-x-2">
           <span className="text-xl font-bold text-white tracking-tight">
             Moon Guide <span className="text-gray-400">AI</span>
           </span>

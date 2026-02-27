@@ -1,34 +1,31 @@
 'use client';
 
-import { useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useAuth } from '@/contexts/auth-context';
-import { Sidebar, MobileSidebarToggle } from '@/components/layout';
 import { LoadingSpinner } from '@/components/ui';
 import { useStudentClasses } from '@/hooks/use-classes';
 import Link from 'next/link';
+import { BookIcon, QuizIcon, DocumentIcon, BriefcaseIcon, UserIcon, CheckCircleIcon } from '@/components/ui/icons';
 
 function StudentDashboardContent() {
   const { user } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const { data: classesData, isLoading } = useStudentClasses(1, 4);
 
   const stats = [
-    { label: 'My Classes', value: classesData?.total.toString() || '0', icon: '📚', color: 'blue' },
-    { label: 'Pending Quizzes', value: '0', icon: '📝', color: 'yellow' },
-    { label: 'Completed Quizzes', value: '0', icon: '✅', color: 'green' },
-    { label: 'Documents', value: '0', icon: '📄', color: 'purple' },
+    { label: 'My Classes', value: classesData?.total.toString() || '0', icon: <BookIcon className="w-8 h-8" />, color: 'blue' },
+    { label: 'Pending Quizzes', value: '0', icon: <QuizIcon className="w-8 h-8" />, color: 'yellow' },
+    { label: 'Completed Quizzes', value: '0', icon: <CheckCircleIcon className="w-8 h-8" />, color: 'green' },
+    { label: 'Documents', value: '0', icon: <DocumentIcon className="w-8 h-8" />, color: 'purple' },
   ];
 
   const quickActions = [
-    { href: '/dashboard/student/classes', label: 'My Classes', icon: '📚', color: 'blue' },
-    { href: '/dashboard/student/quizzes', label: 'Quizzes', icon: '📝', color: 'green' },
-    { href: '/dashboard/student/documents', label: 'Documents', icon: '📄', color: 'yellow' },
-    { href: '/dashboard/student/career', label: 'Career Planning', icon: '💼', color: 'purple' },
-    { href: '/dashboard/student/study', label: 'Study Materials', icon: '📖', color: 'indigo' },
-    { href: '/me', label: 'My Profile', icon: '👤', color: 'gray' },
+    { href: '/dashboard/student/classes', label: 'My Classes', icon: <BookIcon className="w-8 h-8" />, color: 'blue' },
+    { href: '/dashboard/student/quizzes', label: 'Quizzes', icon: <QuizIcon className="w-8 h-8" />, color: 'green' },
+    { href: '/dashboard/student/documents', label: 'Documents', icon: <DocumentIcon className="w-8 h-8" />, color: 'yellow' },
+    { href: '/dashboard/student/career', label: 'Career Planning', icon: <BriefcaseIcon className="w-8 h-8" />, color: 'purple' },
+    { href: '/dashboard/student/study', label: 'Study Materials', icon: <BookIcon className="w-8 h-8" />, color: 'indigo' },
+    { href: '/me', label: 'My Profile', icon: <UserIcon className="w-8 h-8" />, color: 'gray' },
   ];
 
   const colorClasses: Record<string, { bg: string; border: string; text: string; hover: string }> = {
@@ -42,28 +39,13 @@ function StudentDashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
-      <div className="flex">
-        {/* Mobile Sidebar Toggle */}
-        <MobileSidebarToggle
-          isOpen={isSidebarOpen}
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
-
-        {/* Sidebar */}
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          collapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
-
         {/* Main Content */}
         <main className="flex-1 lg:ml-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Welcome Message */}
             <div className="mb-8">
               <h1 className="text-3xl font-bold text-white mb-2">
-                Welcome back, {user?.profile?.first_name || 'Student'}! 👋
+                Welcome back, {user?.profile?.first_name || 'Student'}!
               </h1>
               <p className="text-gray-400">Here's what's happening with your learning journey</p>
             </div>
@@ -77,7 +59,7 @@ function StudentDashboardContent() {
                       <p className="text-sm font-medium text-gray-400">{stat.label}</p>
                       <p className="text-3xl font-bold text-gray-100 mt-1">{stat.value}</p>
                     </div>
-                    <span className="text-3xl">{stat.icon}</span>
+                    <div className="text-gray-600">{stat.icon}</div>
                   </div>
                 </div>
               ))}
@@ -99,7 +81,7 @@ function StudentDashboardContent() {
                           href={action.href}
                           className={`flex flex-col items-center p-4 ${colors.bg} border ${colors.border} rounded-xl ${colors.hover} transition-colors`}
                         >
-                          <span className="text-2xl mb-2">{action.icon}</span>
+                          <div className="text-gray-600 mb-2">{action.icon}</div>
                           <span className={`text-sm font-medium ${colors.text} text-center`}>{action.label}</span>
                         </Link>
                       );
@@ -250,7 +232,6 @@ function StudentDashboardContent() {
             </div>
           </div>
         </main>
-      </div>
     </div>
   );
 }

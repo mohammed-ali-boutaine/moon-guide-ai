@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { StudentInClass } from '@/types';
 import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface StudentTableProps {
   students: StudentInClass[];
@@ -17,6 +18,7 @@ type SortDirection = 'asc' | 'desc';
 export default function StudentTable({ students, onRemove, isLoading = false }: StudentTableProps) {
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [confirmState, setConfirmState] = useState<{ studentId: string; studentName: string } | null>(null);
 
   const handleSort = (field: SortField) => {
     if (field === sortField) {
@@ -28,9 +30,7 @@ export default function StudentTable({ students, onRemove, isLoading = false }: 
   };
 
   const handleRemove = (studentId: string, studentName: string) => {
-    if (window.confirm(`Are you sure you want to remove ${studentName} from this class?`)) {
-      onRemove(studentId);
-    }
+    setConfirmState({ studentId, studentName });
   };
 
   const sortedStudents = [...students].sort((a, b) => {
@@ -120,7 +120,8 @@ export default function StudentTable({ students, onRemove, isLoading = false }: 
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-700">
+    <>
+      <div className="overflow-x-auto rounded-lg border border-gray-700">
       <table className="min-w-full divide-y divide-gray-700">
         <thead className="bg-gray-800">
           <tr>
@@ -181,5 +182,19 @@ export default function StudentTable({ students, onRemove, isLoading = false }: 
         </tbody>
       </table>
     </div>
+
+    <ConfirmModal
+      isOpen={!!confirmState}
+      title="Remove Student"
+      message={`Are you sure you want to remove ${confirmState?.studentName} from this class? This action cannot be undone.`}
+      confirmLabel="Remove"
+      cancelLabel="Cancel"
+      onConfirm={() => {
+        if (confirmState) onRemove(confirmState.studentId);
+        setConfirmState(null);
+      }}
+      onClose={() => setConfirmState(null)}
+    />
+    </>
   );
 }
