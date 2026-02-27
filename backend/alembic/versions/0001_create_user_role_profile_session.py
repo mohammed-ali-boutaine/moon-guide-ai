@@ -24,12 +24,13 @@ role_name_enum = sa.Enum("STUDENT", "TEACHER", "ADMIN", name="role_name")
 
 
 def upgrade() -> None:
-    op.create_table(
-        "roles",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("name", role_name_enum, nullable=False),
-        sa.UniqueConstraint("name", name="uq_roles_name"),
-    )
+    connection = op.get_bind()
+    type_exists = connection.execute(
+        "SELECT 1 FROM pg_type WHERE typname = 'role_name'"
+    ).scalar()
+
+    if not type_exists:
+        op.execute("CREATE TYPE role_name AS ENUM ('STUDENT', 'TEACHER', 'ADMIN')")
 
     op.create_table(
         "users",

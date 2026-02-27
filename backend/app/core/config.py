@@ -5,6 +5,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
+
     
     # Database
     DATABASE_URL: str = "postgresql://user:password@localhost:5432/dbname"
@@ -44,6 +45,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra='ignore'
     )
 
 @lru_cache
