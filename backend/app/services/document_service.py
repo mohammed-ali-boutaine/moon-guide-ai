@@ -9,10 +9,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+import json
+from app.celery_app import celery
 from fastapi import HTTPException, UploadFile, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.models.document import Document, ScopeEnum, StatusEnum, RoleEnum, FileTypeEnum
+from backend.app.models.document_chunk import DocumentChunk
 
 # ── Constants
 
@@ -123,11 +127,24 @@ def _scan_file_clamav(file_path: str) -> None:
             detail="ClamAV scan failed or is not available.",
         )
 
-
-def _extract_text_background(document_id: int, file_path: str, file_type: FileTypeEnum, db: Session):
+# TODO : use meta data
+@celery.task(name="app.services.document_service.extract_text_background")
+def _extract_text_background(document_id: int, file_path: str, file_type: FileTypeEnum, db_url: str):
     """Background job: parse text content and update status to 'ready'."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.core.database import Base
+
+    engine = create_engine(db_url)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+
     try:
+        # test extraction from file
         text = ""
+        metadata = {
+            "source" : file_path
+        }
         if file_type == FileTypeEnum.pdf:
             import PyPDF2  # type: ignore
             with open(file_path, "rb") as f:
@@ -143,18 +160,52 @@ def _extract_text_background(document_id: int, file_path: str, file_type: FileTy
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()
 
-        # TODO : vector db store
-        # store `text` in a document_content table or search index
-        # db.query(Document).filter(Document.id == document_id).update(
-        #     {"status": StatusEnum.ready, "text_content": text}
-        # )
-        # db.commit()
+        # sementic chunking with langchain
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, # max token per chunk
+            chunk_overlap=120 # 12% overlap
+            )
+        
+        chunks = text_splitter.create_documents([text])
+
+        # Add metadata to each chunk
+        for chunk in chunks:
+            chunk.metadata.update(metadata)
+        """
+        Save Text Chunks in SQL Database and Embeddings in Vector Store
+        
+        - SQL Database: Stores the raw text chunks and metadata, ensuring you can retrieve the content even if embeddings are not ready.
+        - Vector Store: Stores embeddings for fast similarity searches.
+        
+        """
+
+        # Save chunks to the database
+        for chunk in chunks:
+            db.add(
+                DocumentChunk(
+                    document_id=document_id,
+                    chunk_text=chunk.page_content,
+                    metadata=json.dumps(chunk.metadata),
+                )
+            )
+        db.commit()
+        # TODO :  vector db store
+
+
+        # Update document status to ready
+        db.query(Document).filter(Document.id == document_id).update(
+            {"status": StatusEnum.ready}
+        )
+        db.commit()
+
 
     except Exception as e:
         db.query(Document).filter(Document.id == document_id).update(
             {"status": StatusEnum.rejected, "rejection_reason": f"Text extraction failed: {e}"}
         )
         db.commit()
+    finally:
+        db.close()
 
 
 # ── Core Service Functions 
@@ -184,7 +235,8 @@ def upload_personal_document(
     db.commit()
     db.refresh(doc)
 
-    background_tasks.add_task(_extract_text_background, doc.id, file_path, file_type, db)
+    # TODO : pass meta data to extract_text_backfround
+    background_tasks.add_task(_extract_text_background, doc.id, file_path, file_type, db_url=db.bind.url)
     return doc
 
 
