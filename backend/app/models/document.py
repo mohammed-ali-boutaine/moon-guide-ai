@@ -1,9 +1,12 @@
 import enum
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Enum, DateTime, Text, ForeignKey
-from sqlalchemy.orm import declarative_base, relationship
+import uuid
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
-Base = declarative_base()
+from sqlalchemy import Column, Integer, String, Enum, DateTime, Text, ForeignKey, Uuid
+from sqlalchemy.orm import relationship
+
+from app.core.database import Base
 
 
 class ScopeEnum(str, enum.Enum):
@@ -34,19 +37,20 @@ class RoleEnum(str, enum.Enum):
 class Document(Base):
     __tablename__ = "documents"
 
-    id = Column(Integer, primary_key=True, index=True)
-    scope = Column(Enum(ScopeEnum), nullable=False) # personal , class
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
-    filename = Column(String(255), nullable=False) # file title 
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    scope = Column(Enum(ScopeEnum), nullable=False)
+    class_id = Column(Uuid(as_uuid=True), ForeignKey("classes.id"), nullable=True)
+    filename = Column(String(255), nullable=False)
     file_url = Column(String(512), nullable=False)
-    file_type = Column(Enum(FileTypeEnum), nullable=False) # md , pdf , docx , txt
-    status = Column(Enum(StatusEnum), nullable=False, default=StatusEnum.pending) # pending , approved , processing , ready , rejected
-    uploaded_by_id = Column(Integer, nullable=False) # user id
-    uploaded_by_role = Column(Enum(RoleEnum), nullable=False) # student , teacher
-    approved_by_id = Column(Integer, nullable=True)
-    approved_at = Column(DateTime, nullable=True)
-    deleted_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.now(datetime.timezone.utc), nullable=False)
+    file_type = Column(Enum(FileTypeEnum), nullable=False)
+    status = Column(Enum(StatusEnum), nullable=False, default=StatusEnum.pending)
+    uploaded_by_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    uploaded_by_role = Column(Enum(RoleEnum), nullable=False)
+    approved_by_id = Column(Uuid(as_uuid=True), nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     rejection_reason = Column(Text, nullable=True)
+    file_size_bytes = Column(Integer, nullable=True)
 
     chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
