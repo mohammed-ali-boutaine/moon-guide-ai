@@ -2,28 +2,39 @@
 routes/personal.py
 Personal document endpoints.
 """
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, BackgroundTasks, UploadFile, File, Form
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session as DBSession
 
 from app.core.database import get_db
-from models.document import RoleEnum
-from schemas.document import DocumentUploadResponse, DocumentListResponse, DocumentResponse
-from services import upload_personal_document, list_personal_documents, soft_delete_document
+from app.core.dependencies import CurrentUser
+from app.core.logging import logger
+from app.models.document import RoleEnum
+from app.schemas.document import DocumentUploadResponse, DocumentListResponse, DocumentResponse
+from app.services.document_service import upload_personal_document, list_personal_documents, soft_delete_document
 
 router = APIRouter(prefix="/documents", tags=["Personal Documents"])
+
 
 @router.post("/personal", response_model=DocumentUploadResponse, status_code=201)
 async def create_personal_document(
     background_tasks: BackgroundTasks,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
     file: UploadFile = File(..., description="PDF, DOCX, TXT or MD file (max 50 MB)"),
-    uploaded_by_id: int = Form(...),
-    uploaded_by_role: RoleEnum = Form(...),
-    db: Session = Depends(get_db),
 ):
     """Upload a personal document. Stored locally and parsed in the background."""
+    logger.info("Personal document upload by user=%s", current_user.email)
+
+    uploaded_by_role = (
+        RoleEnum.teacher if current_user.role and current_user.role.name.value == "TEACHER"
+        else RoleEnum.student
+    )
+
     doc = upload_personal_document(
         file=file,
-        uploaded_by_id=uploaded_by_id,
+        uploaded_by_id=str(current_user.id),
         uploaded_by_role=uploaded_by_role,
         background_tasks=background_tasks,
         db=db,
@@ -39,19 +50,19 @@ async def create_personal_document(
 
 @router.get("/personal", response_model=DocumentListResponse)
 def get_personal_documents(
-    uploaded_by_id: int,
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
 ):
     """List the caller's personal documents."""
-    docs = list_personal_documents(uploaded_by_id=uploaded_by_id, db=db)
+    docs = list_personal_documents(uploaded_by_id=str(current_user.id), db=db)
     return DocumentListResponse(documents=docs, total=len(docs))
 
 
 @router.delete("/{document_id}", status_code=204)
 def delete_document(
     document_id: int,
-    requesting_user_id: int,
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
 ):
     """Soft-delete a document. Only the uploader can delete their own document."""
-    soft_delete_document(document_id=document_id, requesting_user_id=requesting_user_id, db=db)
+    soft_delete_document(document_id=document_id, requesting_user_id=str(current_user.id), db=db)

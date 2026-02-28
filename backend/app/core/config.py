@@ -34,6 +34,25 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
     
+    # Qdrant Vector DB
+    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: str = ""
+    QDRANT_COLLECTION_PREFIX: str = "moonguide"
+    
+    # Embedding
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"  # Sentence Transformers model
+    EMBEDDING_DIMENSION: int = 384  # Dimension for all-MiniLM-L6-v2
+    
+    # Document Processing
+    MAX_FILE_SIZE_MB: int = 50
+    CHUNK_SIZE: int = 1000  # tokens
+    CHUNK_OVERLAP: int = 120  # ~12% overlap
+    
+    # ClamAV
+    CLAMAV_ENABLED: bool = False  # Disable by default for dev
+    CLAMAV_HOST: str = "localhost"
+    CLAMAV_PORT: int = 3310
+    
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"
     

@@ -23,6 +23,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
     
+    # Initialize Qdrant connection
+    try:
+        from app.services.qdrant_service import get_qdrant_client
+        get_qdrant_client()
+        logger.info("Qdrant vector database connected")
+    except Exception as e:
+        logger.warning(f"Qdrant not available (non-fatal): {e}")
+    
     yield
     
     # Shutdown
