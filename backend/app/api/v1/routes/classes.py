@@ -6,11 +6,26 @@ import math
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy.orm import Session as DBSession
 
+from app.models.document import RoleEnum
+
+from app.schemas.document import (
+    DocumentUploadResponse,
+    DocumentListResponse,
+    DocumentRejectRequest,
+    DocumentResponse,
+)
+from app.services.document_service import (
+    upload_class_document,
+    list_class_documents,
+    approve_document,
+    reject_document,
+)
+
 from app.core.database import get_db
-from app.core.dependencies import TeacherUser
+from app.core.dependencies import TeacherUser,StudentUser,CurrentUser, get_current_user
 from app.schemas.class_schema import (
     AddStudentRequest,
     AddStudentResponse,
@@ -313,3 +328,126 @@ async def remove_student_from_class(
     if error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
     return RemoveStudentResponse(message="Student removed successfully")
+
+
+
+@router.post("/classes/{class_id}/documents", response_model=DocumentUploadResponse, status_code=201)
+async def upload_class_doc(
+    class_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: Annotated[StudentUser | TeacherUser, Depends(get_current_user)],
+    db: Annotated[DBSession, Depends(get_db)],
+    file: UploadFile = File(..., description="PDF, DOCX, TXT or MD file (max 50 MB)"),
+):
+    """
+    Upload a document to a class.
+    - Teachers: auto-approved, immediately processed.
+    - Students: enters 'pending' state, awaiting teacher approval.
+    """
+
+    uploaded_by_id = current_user.id
+    uploaded_by_role = RoleEnum.teacher if isinstance(current_user, TeacherUser) else RoleEnum.student
+
+    doc = upload_class_document(
+        file=file,
+        class_id=class_id,
+        uploaded_by_id=uploaded_by_id,
+        uploaded_by_role=uploaded_by_role,
+        background_tasks=background_tasks,
+        db=db,
+    )
+    msg = (
+        "File uploaded and approved. Text extraction running."
+        if uploaded_by_role == RoleEnum.teacher
+        else "File uploaded. Awaiting teacher approval."
+    )
+    return DocumentUploadResponse(
+        document_id=doc.id,
+        status=doc.status,
+        filename=doc.filename,
+        file_type=doc.file_type,
+        message=msg,
+    )
+
+
+@router.get("/classes/{class_id}/documents", response_model=DocumentListResponse)
+def get_class_documents(
+    class_id: int,
+    currentUser : CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)]
+):
+    """List approved/ready documents for a class. Accessible by all roles."""
+    # if student check if student part of class
+    # if teacher check if he class creator
+    # if admin return
+
+    if currentUser.role.name == RoleEnum.student.value:
+        if not ClassService.is_student_in_class(db, class_id, currentUser.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not enrolled in this class",
+            )
+    elif currentUser.role.name == RoleEnum.teacher.value:
+        if not ClassService.is_teacher_of_class(db, class_id, currentUser.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access documents for this class",
+            )
+    elif currentUser.role.name == RoleEnum.admin.value:
+        pass  # Admin can access all documents
+
+    docs = list_class_documents(class_id=class_id, db=db)
+    return DocumentListResponse(documents=docs, total=len(docs))
+
+
+
+@router.post("/documents/{document_id}/approve", response_model=DocumentResponse)
+def approve_doc(
+    document_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+):
+    """Approve a pending class document. Teacher only."""
+
+    # check if teacher is owner of class related to document
+    if not ClassService.is_teacher_of_document(db, document_id, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to approve this document",
+        )
+    
+    teacher_id = current_user.id
+    doc = approve_document(
+        document_id=document_id,
+        teacher_id=teacher_id,
+        background_tasks=background_tasks,
+        db=db,
+    )
+    return doc
+
+
+@router.post("/documents/{document_id}/reject", response_model=DocumentResponse)
+def reject_doc(
+    document_id: int,
+    body: DocumentRejectRequest,
+    currentUser: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+):
+    """Reject a pending class document. Teacher only."""
+
+    # check if teacher is owner of class related to document
+    if not ClassService.is_teacher_of_document(db, document_id, currentUser.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to reject this document",
+        )
+
+    teacher_id = currentUser.id
+    doc = reject_document(
+        document_id=document_id,
+        teacher_id=teacher_id,
+        reason=body.reason,
+        db=db,
+    )
+    return doc
