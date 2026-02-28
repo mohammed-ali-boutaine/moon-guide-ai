@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Enum, DateTime, Text, ForeignKey
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
@@ -46,5 +46,7 @@ class Document(Base):
     approved_by_id = Column(Integer, nullable=True)
     approved_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now(datetime.timezone.utc), nullable=False)
     rejection_reason = Column(Text, nullable=True)
+
+    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
