@@ -259,19 +259,19 @@ class TestChunkText:
 
 
 class TestDocumentChunkModel:
-    def test_chunk_creation(self, db_session):
+    def test_chunk_creation(self, db_session, student_user):
         """Test creating a DocumentChunk with all fields."""
         from app.models.document_chunk import DocumentChunk
         from app.models.document import Document, ScopeEnum, StatusEnum, RoleEnum, FileTypeEnum
 
-        # First create a document
+        # First create a document using the student_user fixture
         doc = Document(
             scope=ScopeEnum.personal,
             filename="test.txt",
             file_url="/static/uploads/test.txt",
             file_type=FileTypeEnum.txt,
             status=StatusEnum.processing,
-            uploaded_by_id=str(db_session.query(MagicMock).first) if False else "00000000-0000-0000-0000-000000000001",
+            uploaded_by_id=student_user.id,
             uploaded_by_role=RoleEnum.student,
         )
         db_session.add(doc)

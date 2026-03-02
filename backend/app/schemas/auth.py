@@ -1,6 +1,6 @@
 # app/schemas/auth.py
 from app.models.role import RoleName
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional
 
 
@@ -19,14 +19,13 @@ class UserProfileUpdate(BaseModel):
     new_password: Optional[str] = Field(None, min_length=8)
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: str
     email: str
     is_active: bool
     role: str | None
     profile: dict | None
-
-    class Config:
-        from_attributes = True
         
 class LoginRequest(BaseModel):
     email: EmailStr
