@@ -94,16 +94,14 @@ async def login(
 @router.get("/google/login", summary="Redirect to Google OAuth2")
 async def google_login():
     """Redirect the user to the Google OAuth consent screen."""
-    async with sso:
-        return await sso.get_login_redirect()
+    return await sso.get_login_redirect()
 
 
 @router.get("/google/callback", summary="Google OAuth callback")
 async def google_callback(request: Request, db: DBSession = Depends(get_db)):
     """Handle the Google OAuth callback, create/login user, redirect to frontend."""
     try:
-        async with sso:
-            google_user = await sso.verify_and_process(request)
+        google_user = await sso.verify_and_process(request)
 
         if not google_user:
             return RedirectResponse(

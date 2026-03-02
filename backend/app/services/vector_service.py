@@ -14,7 +14,7 @@ from qdrant_client.http import models as qmodels
 
 from app.core.config import settings
 from app.core.logging import logger
-from app.services.embedding_service import embed_texts, embed_query
+from app.services.embedding_service import embed_texts, embed_query, get_embedding_dimension
 from app.services.qdrant_service import (
     _collection_name,
     ensure_collection,
@@ -48,7 +48,7 @@ def store_chunk_embeddings(
         return 0
 
     collection = _collection_name(class_id=class_id, document_id=document_id)
-    ensure_collection(collection)
+    ensure_collection(collection, vector_size=get_embedding_dimension())
 
     texts = [c["chunk_text"] for c in chunks]
     logger.info(

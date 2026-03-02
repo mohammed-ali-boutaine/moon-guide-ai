@@ -238,7 +238,13 @@ def _extract_text_from_file(file_path: str, file_type: str) -> str:
     Returns:
         Extracted text string.
     """
-    abs_path = file_path.lstrip("/")
+    # Handle both absolute and relative paths correctly
+    if os.path.isabs(file_path):
+        abs_path = file_path
+    else:
+        # For relative paths, ensure we don't accidentally strip needed prefixes
+        abs_path = os.path.abspath(file_path)
+    
     logger.info("Extracting text from %s (type=%s)", abs_path, file_type)
 
     text = ""

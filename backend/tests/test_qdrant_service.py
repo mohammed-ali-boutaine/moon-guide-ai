@@ -181,7 +181,7 @@ class TestListCollections:
 
 
 class TestEmbeddingService:
-    @patch("app.services.embedding_service._get_model")
+    @patch("app.services.embedding_service._get_st_model")
     def test_embed_texts(self, mock_get_model):
         import numpy as np
         from app.services.embedding_service import embed_texts
@@ -196,7 +196,7 @@ class TestEmbeddingService:
         assert len(result[0]) == 3
         assert result[0] == [0.1, 0.2, 0.3]
 
-    @patch("app.services.embedding_service._get_model")
+    @patch("app.services.embedding_service._get_st_model")
     def test_embed_empty_list(self, mock_get_model):
         from app.services.embedding_service import embed_texts
 
@@ -204,7 +204,7 @@ class TestEmbeddingService:
         assert result == []
         mock_get_model.assert_not_called()
 
-    @patch("app.services.embedding_service._get_model")
+    @patch("app.services.embedding_service._get_st_model")
     def test_embed_query(self, mock_get_model):
         import numpy as np
         from app.services.embedding_service import embed_query
@@ -225,13 +225,15 @@ class TestEmbeddingService:
 
 
 class TestVectorService:
+    @patch("app.services.vector_service.get_embedding_dimension")
     @patch("app.services.vector_service.upsert_vectors")
     @patch("app.services.vector_service.ensure_collection")
     @patch("app.services.vector_service.embed_texts")
-    def test_store_chunk_embeddings(self, mock_embed, mock_ensure, mock_upsert):
+    def test_store_chunk_embeddings(self, mock_embed, mock_ensure, mock_upsert, mock_dim):
         from app.services.vector_service import store_chunk_embeddings
 
         mock_embed.return_value = [[0.1, 0.2], [0.3, 0.4]]
+        mock_dim.return_value = 384
 
         chunks = [
             {"chunk_text": "chunk 1", "chunk_index": 0, "metadata": "{}"},
