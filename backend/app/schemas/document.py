@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from app.models.document import FileTypeEnum, StatusEnum, RoleEnum, ScopeEnum
 
 
@@ -31,6 +31,8 @@ class SemanticSearchRequest(BaseModel):
 # ── Response Schemas 
 
 class DocumentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     scope: ScopeEnum
     class_id: Optional[str] = None
@@ -45,9 +47,6 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     rejection_reason: Optional[str] = None
     file_size_bytes: Optional[int] = None
-
-    class Config:
-        from_attributes = True
 
 
 class DocumentUploadResponse(BaseModel):
@@ -64,6 +63,8 @@ class DocumentListResponse(BaseModel):
 
 
 class DocumentChunkResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     document_id: int
     chunk_index: int
@@ -71,9 +72,6 @@ class DocumentChunkResponse(BaseModel):
     token_count: Optional[int] = None
     embedded: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class SemanticSearchResult(BaseModel):

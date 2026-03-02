@@ -40,8 +40,21 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_PREFIX: str = "moonguide"
     
     # Embedding
+    EMBEDDING_PROVIDER: str = "sentence-transformers"  # "sentence-transformers" or "mistral"
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"  # Sentence Transformers model
     EMBEDDING_DIMENSION: int = 384  # Dimension for all-MiniLM-L6-v2
+
+    # Mistral Embedding
+    MISTRAL_API_KEY: str = ""
+    MISTRAL_EMBEDDING_MODEL: str = "mistral-embed"  # Mistral's embedding model (1024 dim)
+    MISTRAL_EMBEDDING_DIMENSION: int = 1024
+    MISTRAL_EMBEDDING_BATCH_SIZE: int = 32  # Max texts per API call
+    MISTRAL_RATE_LIMIT_RPM: int = 300  # Requests per minute
+
+    # Embedding Caching
+    EMBEDDING_CACHE_ENABLED: bool = True
+    EMBEDDING_CACHE_TTL: int = 86400  # 24 hours in seconds
+    EMBEDDING_CACHE_PREFIX: str = "emb:"  # Redis key prefix
     
     # Document Processing
     MAX_FILE_SIZE_MB: int = 50

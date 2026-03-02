@@ -49,7 +49,11 @@ class Document(Base):
     approved_by_id = Column(Uuid(as_uuid=True), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
     rejection_reason = Column(Text, nullable=True)
     file_size_bytes = Column(Integer, nullable=True)
 
