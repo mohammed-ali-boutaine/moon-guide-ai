@@ -23,6 +23,8 @@ class Class(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     teacher_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),

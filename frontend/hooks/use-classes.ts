@@ -104,6 +104,8 @@ export function useCreateClass() {
           id: `temp-${Date.now()}`,
           name: newClass.name,
           description: newClass.description,
+          image_url: newClass.image_url || null,
+          thumbnail_url: newClass.thumbnail_url || null,
           student_count: 0,
           teacher_id: '',
           created_at: new Date().toISOString(),

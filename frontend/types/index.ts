@@ -52,6 +52,8 @@ export interface Class {
   id: string;
   name: string;
   description: string | null;
+  image_url: string | null;
+  thumbnail_url: string | null;
   student_count: number;
   teacher_id: string;
   created_at: string;
@@ -61,6 +63,8 @@ export interface ClassDetail {
   id: string;
   name: string;
   description: string | null;
+  image_url: string | null;
+  thumbnail_url: string | null;
   teacher_id: string;
   created_at: string;
   students: StudentInClass[];
@@ -78,11 +82,15 @@ export interface PaginatedClasses {
 export interface CreateClassData {
   name: string;
   description: string;
+  image_url?: string;
+  thumbnail_url?: string;
 }
 
 export interface UpdateClassData {
   name?: string;
   description?: string;
+  image_url?: string;
+  thumbnail_url?: string;
 }
 
 export interface AddStudentResult {
@@ -154,6 +162,8 @@ export interface StudentClass {
   id: string;
   name: string;
   description: string | null;
+  image_url: string | null;
+  thumbnail_url: string | null;
   teacher: TeacherInfo;
   student_count: number;
   joined_at: string;

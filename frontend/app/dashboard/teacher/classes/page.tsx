@@ -9,7 +9,7 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui';
 import { useClasses, useCreateClass, useUpdateClass, useDeleteClass } from '@/hooks/use-classes';
-import type { Class } from '@/types';
+import type { Class, CreateClassData } from '@/types';
 
 export default function TeacherClassesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -22,7 +22,7 @@ export default function TeacherClassesPage() {
   const updateClassMutation = useUpdateClass();
   const deleteClassMutation = useDeleteClass();
 
-  const handleCreateClass = async (data: { name: string; description: string }) => {
+  const handleCreateClass = async (data: CreateClassData) => {
     try {
       await createClassMutation.mutateAsync(data);
       setIsCreateModalOpen(false);
@@ -31,7 +31,7 @@ export default function TeacherClassesPage() {
     }
   };
 
-  const handleUpdateClass = async (data: { name: string; description: string }) => {
+  const handleUpdateClass = async (data: CreateClassData) => {
     if (!editingClass) return;
     try {
       await updateClassMutation.mutateAsync({ id: editingClass.id, data });

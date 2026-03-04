@@ -18,6 +18,17 @@ export default function ClassCard({ classData, onEdit, onDelete }: ClassCardProp
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
+      {/* Thumbnail */}
+      {classData.thumbnail_url && (
+        <div className="w-full h-32 rounded-lg overflow-hidden mb-4 bg-gray-800">
+          <img
+            src={classData.thumbnail_url}
+            alt={classData.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold text-white truncate">{classData.name}</h3>

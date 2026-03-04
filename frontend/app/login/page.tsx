@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const { login, isLoading } = useAuth();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect') ?? undefined;
@@ -23,13 +24,17 @@ export default function LoginPage() {
     log.debug('Login form submitted');
 
     try {
+      setIsRedirecting(true);
       await login(email, password, redirectTo);
     } catch (err) {
+      setIsRedirecting(false);
       const message = err instanceof Error ? err.message : 'An error occurred. Please try again.';
       log.warn('Login form error', { message });
       setError(message);
     }
   };
+
+  const isProcessing = isLoading || isRedirecting;
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4 py-12">
@@ -41,7 +46,20 @@ export default function LoginPage() {
         </div>
 
         {/* Login Form */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-8">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-8 relative overflow-hidden">
+          {/* Loading Overlay */}
+          {isProcessing && (
+            <div className="absolute inset-0 bg-gray-900/90 backdrop-blur-sm flex flex-col items-center justify-center z-10 transition-all duration-200">
+              <div className="relative">
+                <div className="w-12 h-12 border-2 border-gray-700 border-t-primary-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 w-12 h-12 border-2 border-transparent border-t-primary-400/30 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+              </div>
+              <p className="mt-4 text-sm text-gray-300 animate-pulse">
+                {isRedirecting ? 'Redirecting...' : 'Signing in...'}
+              </p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div className="bg-red-950 border border-red-800 text-red-400 px-4 py-3 rounded-lg text-sm">
@@ -60,6 +78,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all placeholder:text-gray-500"
+                disabled={isProcessing}
                 placeholder="your.email@example.com"
               />
             </div>
@@ -83,6 +102,7 @@ export default function LoginPage() {
               <label className="flex items-center">
                 <input
                   type="checkbox"
+                  disabled={isProcessing}
                   className="w-4 h-4 bg-gray-800 border-gray-700 rounded focus:ring-primary-500 text-primary-600"
                 />
                 <span className="ml-2 text-sm text-gray-400">Remember me</span>
@@ -97,10 +117,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isProcessing}
               className="w-full bg-gray-100 text-gray-900 py-3 px-4 rounded-lg font-semibold hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isProcessing ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
 

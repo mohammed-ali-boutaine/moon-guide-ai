@@ -10,6 +10,12 @@ class ClassBase(BaseModel):
     description: str | None = Field(
         None, max_length=2048, description="Class description"
     )
+    image_url: str | None = Field(
+        None, max_length=2048, description="Class cover image URL"
+    )
+    thumbnail_url: str | None = Field(
+        None, max_length=2048, description="Class thumbnail image URL"
+    )
 
 
 class ClassCreate(ClassBase):
@@ -23,6 +29,8 @@ class ClassUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=2048)
+    image_url: str | None = Field(None, max_length=2048)
+    thumbnail_url: str | None = Field(None, max_length=2048)
 
 
 # Student information in class context

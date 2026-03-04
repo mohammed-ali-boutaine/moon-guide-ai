@@ -131,7 +131,44 @@ export default function AdminDashboard() {
     }
   };
 
+  const [formErrors, setFormErrors] = useState<{ email?: string; password?: string; first_name?: string; last_name?: string }>({});
+
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validateAdminForm = (): boolean => {
+    const errors: { email?: string; password?: string; first_name?: string; last_name?: string } = {};
+
+    if (!adminForm.email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!validateEmail(adminForm.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    if (!adminForm.password.trim()) {
+      errors.password = 'Password is required';
+    } else if (adminForm.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters';
+    }
+
+    if (!adminForm.first_name.trim()) {
+      errors.first_name = 'First name is required';
+    }
+
+    if (!adminForm.last_name.trim()) {
+      errors.last_name = 'Last name is required';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleCreateAdmin = async () => {
+    if (!validateAdminForm()) {
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/users/admin`, {
@@ -314,10 +351,23 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               {(['email', 'password', 'first_name', 'last_name'] as const).map((field) => (
                 <div key={field}>
-                  <label className="block text-xs font-medium text-gray-400 mb-1 capitalize">{field.replace('_', ' ')}</label>
-                  <input type={field === 'password' ? 'password' : 'text'} value={adminForm[field]}
-                    onChange={(e) => setAdminForm((f) => ({ ...f, [field]: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-white/20" />
+                  <label className="block text-xs font-medium text-gray-400 mb-1 capitalize">
+                    {field.replace('_', ' ')}
+                    {formErrors[field] && <span className="text-red-400 ml-2">({formErrors[field]})</span>}
+                  </label>
+                  <input
+                    type={field === 'password' ? 'password' : 'text'}
+                    value={adminForm[field]}
+                    onChange={(e) => {
+                      setAdminForm((f) => ({ ...f, [field]: e.target.value }));
+                      if (formErrors[field]) {
+                        setFormErrors((prev) => ({ ...prev, [field]: undefined }));
+                      }
+                    }}
+                    className={`w-full px-3 py-2 bg-gray-800 border text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-white/20 ${
+                      formErrors[field] ? 'border-red-500' : 'border-gray-700'
+                    }`}
+                  />
                 </div>
               ))}
               <div className="flex gap-3 justify-end pt-2">
