@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.chat_session import ChatSession
     from app.models.class_student import ClassStudent
     from app.models.user import User
 
@@ -41,4 +42,7 @@ class Class(Base):
     )
     class_students: Mapped[list["ClassStudent"]] = relationship(
         back_populates="class_", cascade="all, delete-orphan", overlaps="students"
+    )
+    chat_sessions: Mapped[list["ChatSession"]] = relationship(
+        back_populates="class_", cascade="all, delete-orphan"
     )
