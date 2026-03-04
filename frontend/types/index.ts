@@ -101,7 +101,48 @@ export interface AddStudentsResponse {
   };
 }
 
-// Student Class types
+// Document types
+export type DocumentStatus = 'pending' | 'approved' | 'processing' | 'ready' | 'rejected';
+export type DocumentFileType = 'pdf' | 'docx' | 'txt' | 'md';
+export type DocumentScope = 'personal' | 'class';
+
+export interface Document {
+  id: number;
+  scope: DocumentScope;
+  class_id: string | null;
+  filename: string;
+  file_url: string;
+  file_type: DocumentFileType;
+  status: DocumentStatus;
+  uploaded_by_id: string;
+  uploaded_by_role: 'student' | 'teacher';
+  approved_by_id: string | null;
+  approved_at: string | null;
+  created_at: string;
+  rejection_reason: string | null;
+  file_size_bytes: number | null;
+}
+
+export interface DocumentListResponse {
+  documents: Document[];
+  total: number;
+}
+
+export interface DocumentUploadResponse {
+  document_id: number;
+  status: DocumentStatus;
+  filename: string;
+  file_type: DocumentFileType;
+  message: string;
+}
+
+export interface UploadProgress {
+  file: File;
+  progress: number;
+  status: 'uploading' | 'processing' | 'completed' | 'error';
+  error?: string;
+  documentId?: number;
+}
 export interface TeacherInfo {
   id: string;
   email: string;
