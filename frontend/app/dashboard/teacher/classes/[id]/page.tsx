@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useClassDetail, useRemoveStudent } from '@/hooks/use-classes';
-import { StudentTable, AddStudentModal } from '@/components/classes';
+import { useClassDetail, useRemoveStudent, useUpdateClass } from '@/hooks/use-classes';
+import { StudentTable, AddStudentModal, ClassForm } from '@/components/classes';
 import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import Modal from '@/components/ui/Modal';
 import { ProtectedRoute } from '@/components/auth';
 
 
@@ -16,6 +17,7 @@ function ClassDetailContent() {
   const classId = params.id as string;
 
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -33,15 +35,23 @@ function ClassDetailContent() {
 
   const { data: classDetail, isLoading, error } = useClassDetail(classId, debouncedSearchQuery || undefined);
   const { mutate: removeStudent } = useRemoveStudent(classId);
+  const updateClassMutation = useUpdateClass();
 
   const handleRemoveStudent = (studentId: string) => {
     removeStudent(studentId);
   };
 
   const handleEditClass = () => {
-    // Navigate to edit page or open edit modal
-    // For now, we'll just show an alert
-    alert('Edit functionality will be implemented');
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateClass = async (data: { name: string; description: string; image_url?: string; thumbnail_url?: string }) => {
+    try {
+      await updateClassMutation.mutateAsync({ id: classId, data });
+      setIsEditModalOpen(false);
+    } catch (err) {
+      console.error('Failed to update class:', err);
+    }
   };
 
   if (isLoading) {
@@ -124,24 +134,39 @@ function ClassDetailContent() {
 
         {/* Header Section */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-8">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-white mb-2">{classDetail.name}</h1>
-              {classDetail.description && (
-                <p className="text-gray-400 text-lg">{classDetail.description}</p>
-              )}
-            </div>
-            <Button variant="outline" onClick={handleEditClass}>
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Class Image */}
+            {classDetail.image_url && (
+              <div className="w-full md:w-48 h-32 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0">
+                <img
+                  src={classDetail.image_url}
+                  alt={classDetail.name}
+                  className="w-full h-full object-cover"
                 />
-              </svg>
-              Edit Class
-            </Button>
+              </div>
+            )}
+
+            <div className="flex-1">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold text-white mb-2">{classDetail.name}</h1>
+                  {classDetail.description && (
+                    <p className="text-gray-400 text-lg">{classDetail.description}</p>
+                  )}
+                </div>
+                <Button variant="outline" onClick={handleEditClass} className="ml-4">
+                  <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                  Edit Class
+                </Button>
+              </div>
+            </div>
           </div>
 
           {/* Statistics */}
@@ -284,6 +309,32 @@ function ClassDetailContent() {
           // Optional: Show success toast or notification
         }}
       />
+
+      {/* Edit Class Modal */}
+      {classDetail && (
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          title="Edit Class"
+        >
+          <ClassForm
+            initialData={{
+              id: classDetail.id,
+              name: classDetail.name,
+              description: classDetail.description,
+              image_url: classDetail.image_url,
+              thumbnail_url: classDetail.thumbnail_url,
+              student_count: classDetail.student_count,
+              teacher_id: classDetail.teacher_id,
+              created_at: classDetail.created_at,
+            }}
+            onSubmit={handleUpdateClass}
+            onCancel={() => setIsEditModalOpen(false)}
+            isSubmitting={updateClassMutation.isPending}
+            submitLabel="Save Changes"
+          />
+        </Modal>
+      )}
     </div>
   );
 }
