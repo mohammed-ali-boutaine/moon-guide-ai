@@ -6,7 +6,7 @@ import math
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks, UploadFile, File
 from sqlalchemy.orm import Session as DBSession
 
 from app.models.document import RoleEnum
@@ -14,14 +14,10 @@ from app.models.document import RoleEnum
 from app.schemas.document import (
     DocumentUploadResponse,
     DocumentListResponse,
-    DocumentRejectRequest,
-    DocumentResponse,
 )
 from app.services.document_service import (
     upload_class_document,
     list_class_documents,
-    approve_document,
-    reject_document,
 )
 
 from app.core.database import get_db
@@ -331,7 +327,7 @@ async def remove_student_from_class(
 
 
 
-@router.post("/classes/{class_id}/documents", response_model=DocumentUploadResponse, status_code=201)
+@router.post("/{class_id}/documents", response_model=DocumentUploadResponse, status_code=201)
 async def upload_class_doc(
     class_id: int,
     background_tasks: BackgroundTasks,
@@ -370,7 +366,7 @@ async def upload_class_doc(
     )
 
 
-@router.get("/classes/{class_id}/documents", response_model=DocumentListResponse)
+@router.get("/{class_id}/documents", response_model=DocumentListResponse)
 def get_class_documents(
     class_id: int,
     currentUser : CurrentUser,
@@ -398,56 +394,3 @@ def get_class_documents(
 
     docs = list_class_documents(class_id=class_id, db=db)
     return DocumentListResponse(documents=docs, total=len(docs))
-
-
-
-@router.post("/documents/{document_id}/approve", response_model=DocumentResponse)
-def approve_doc(
-    document_id: int,
-    background_tasks: BackgroundTasks,
-    current_user: CurrentUser,
-    db: Annotated[DBSession, Depends(get_db)],
-):
-    """Approve a pending class document. Teacher only."""
-
-    # check if teacher is owner of class related to document
-    if not ClassService.is_teacher_of_document(db, document_id, current_user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to approve this document",
-        )
-    
-    teacher_id = current_user.id
-    doc = approve_document(
-        document_id=document_id,
-        teacher_id=teacher_id,
-        background_tasks=background_tasks,
-        db=db,
-    )
-    return doc
-
-
-@router.post("/documents/{document_id}/reject", response_model=DocumentResponse)
-def reject_doc(
-    document_id: int,
-    body: DocumentRejectRequest,
-    currentUser: CurrentUser,
-    db: Annotated[DBSession, Depends(get_db)],
-):
-    """Reject a pending class document. Teacher only."""
-
-    # check if teacher is owner of class related to document
-    if not ClassService.is_teacher_of_document(db, document_id, currentUser.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to reject this document",
-        )
-
-    teacher_id = currentUser.id
-    doc = reject_document(
-        document_id=document_id,
-        teacher_id=teacher_id,
-        reason=body.reason,
-        db=db,
-    )
-    return doc
