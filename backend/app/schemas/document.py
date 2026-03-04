@@ -28,6 +28,18 @@ class SemanticSearchRequest(BaseModel):
     document_id: Optional[int] = Field(None, description="Restrict search to a specific document")
 
 
+class SearchRequest(BaseModel):
+    """Request body for general semantic search with query expansion."""
+    query: str = Field(..., min_length=1, max_length=2000, description="Natural language search query")
+    class_id: Optional[str] = Field(None, description="Filter by class ID")
+    document_id: Optional[int] = Field(None, description="Restrict search to a specific document")
+    limit: int = Field(5, ge=1, le=50, description="Maximum number of results (default 5, top-5 chunks)")
+    score_threshold: float = Field(0.3, ge=0.0, le=1.0, description="Minimum similarity score (default 0.3)")
+    expand_query: bool = Field(True, description="Enable query expansion for better results")
+    page: int = Field(1, ge=1, description="Page number for pagination")
+    page_size: int = Field(5, ge=1, le=50, description="Items per page")
+
+
 # ── Response Schemas 
 
 class DocumentResponse(BaseModel):
@@ -91,6 +103,37 @@ class SemanticSearchResponse(BaseModel):
     results: list[SemanticSearchResult]
     total: int
     collection: str
+
+
+class SearchResultDocumentInfo(BaseModel):
+    """Original document info for search results."""
+    id: int
+    filename: str
+    file_type: FileTypeEnum
+    status: StatusEnum
+    class_id: Optional[str] = None
+
+
+class SearchResult(BaseModel):
+    """Single search result with chunk and original document info."""
+    id: str
+    score: float
+    chunk_text: str
+    chunk_index: Optional[int] = None
+    metadata: Optional[str] = None
+    document: SearchResultDocumentInfo
+
+
+class SearchResponse(BaseModel):
+    """Response for general semantic search with pagination and original document info."""
+    query: str
+    expanded_query: Optional[str] = None
+    results: list[SearchResult]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    collection: Optional[str] = None
 
 
 class CollectionInfoResponse(BaseModel):
