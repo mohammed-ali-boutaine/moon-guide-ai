@@ -79,6 +79,20 @@ class Settings(BaseSettings):
     # Backend_URL
     BACKEND_URL: str = "http://localhost:8000"
 
+    # Gemini LLM
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MAX_OUTPUT_TOKENS: int = 1024
+    GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_MAX_RETRIES: int = 3
+    GEMINI_RETRY_DELAY: float = 2.0  # seconds between retries
+
+    # RAG settings
+    RAG_TOP_K: int = 5                   # chunks to retrieve
+    RAG_SCORE_THRESHOLD: float = 0.35    # minimum similarity score
+    RAG_CONTEXT_MAX_CHARS: int = 12000   # ~3 000 tokens of context
+    RAG_HISTORY_MESSAGES: int = 6        # last N messages included in prompt
+
     
     model_config = SettingsConfigDict(
         env_file=".env",
