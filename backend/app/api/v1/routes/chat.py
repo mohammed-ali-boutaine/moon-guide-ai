@@ -10,6 +10,7 @@ Chat / RAG endpoints:
 """
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Optional
@@ -24,6 +25,7 @@ from app.core.logging import logger
 from app.models.chat_message import ChatMessage, ChatRole
 from app.models.chat_session import ChatSession
 from app.models.document import Document
+from app.redis_client import redis_client
 from app.schemas.chat import (
     ChatRequest,
     ChatResponse,
@@ -35,7 +37,28 @@ from app.schemas.chat import (
 )
 from app.services.rag_service import run_rag_pipeline
 
+_CHAT_RATE_LIMIT = 10   # requests
+_CHAT_RATE_WINDOW = 60  # seconds
+_RAG_TIMEOUT = 30.0     # seconds
+
 router = APIRouter(prefix="/chat", tags=["Chat / RAG"])
+
+
+# ── Rate limiting ──────────────────────────────────────────────────────────────
+
+def _rate_limit_chat(current_user: CurrentUser) -> None:
+    """Allow at most 10 chat messages per user per minute (Redis counter)."""
+    key = f"rl:chat:{current_user.id}"
+    count = redis_client.incr(key)
+    if count == 1:
+        redis_client.expire(key, _CHAT_RATE_WINDOW)
+    if count > _CHAT_RATE_LIMIT:
+        ttl = max(redis_client.ttl(key), 1)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limit exceeded. Try again in {ttl}s.",
+            headers={"Retry-After": str(ttl)},
+        )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -168,11 +191,12 @@ def get_session(
     response_model=ChatResponse,
     summary="Send a message and get an AI-powered answer",
 )
-def send_message(
+async def send_message(
     session_id: uuid.UUID,
     body: ChatRequest,
     current_user: CurrentUser,
     db: Annotated[DBSession, Depends(get_db)],
+    _: Annotated[None, Depends(_rate_limit_chat)],
 ) -> ChatResponse:
     """
     Send a user message, run the RAG pipeline, and return the assistant's answer.
@@ -242,15 +266,26 @@ def send_message(
         len(personal_document_ids) if personal_document_ids else 0,
     )
 
-    # ── Run the RAG pipeline ─────────────────────────────────────────────────
-    rag_result = run_rag_pipeline(
-        query=body.content,
-        history=history,
-        class_id=class_id_str,
-        document_id=body.document_id if class_id_str else None,
-        personal_document_ids=personal_document_ids,
-        doc_name_map=doc_name_map,
-    )
+    # ── Run the RAG pipeline (30s timeout) ──────────────────────────────────
+    try:
+        rag_result = await asyncio.wait_for(
+            asyncio.to_thread(
+                run_rag_pipeline,
+                query=body.content,
+                history=history,
+                class_id=class_id_str,
+                document_id=body.document_id if class_id_str else None,
+                personal_document_ids=personal_document_ids,
+                doc_name_map=doc_name_map,
+            ),
+            timeout=_RAG_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("RAG pipeline timed out for session=%s user=%s", session_id, current_user.email)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Request timed out. The AI took too long to respond.",
+        )
 
     # ── Persist user message ─────────────────────────────────────────────────
     user_msg = ChatMessage(
