@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+
 import { useStudentClasses } from '@/hooks/use-classes';
 import { LoadingSpinner } from '@/components/ui';
 import Button from '@/components/ui/Button';
@@ -201,6 +202,25 @@ function StudentClassDetailContent() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* AI Chat CTA */}
+            <div className="bg-gradient-to-r from-primary-900/40 to-primary-800/20 border border-primary-700/50 rounded-lg p-6 mb-6 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-white font-semibold text-lg">AI Study Assistant</h2>
+                <p className="text-gray-400 text-sm mt-0.5">Ask questions about course documents using AI-powered RAG.</p>
+              </div>
+              <Link
+                href={`/dashboard/student/classes/${classId}/chat`}
+                className="flex-shrink-0 inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                  />
+                </svg>
+                Open Chat
+              </Link>
             </div>
 
             {/* Content Sections */}

@@ -9,3 +9,10 @@ export {
   useUploadPersonalDocument,
   useDeleteDocument,
 } from './use-documents';
+export {
+  useChatSessions,
+  useChatSessionDetail,
+  useCreateChatSession,
+  useSendMessage,
+  useEndChatSession,
+} from './use-chat';

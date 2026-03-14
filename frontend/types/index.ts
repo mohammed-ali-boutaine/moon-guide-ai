@@ -9,14 +9,6 @@ export interface User {
   createdAt: string;
 }
 
-export interface Document {
-  id: string;
-  title: string;
-  content: string;
-  userId: string;
-  createdAt: string;
-  updatedAt: string;
-}
 
 export interface Quiz {
   id: string;
@@ -176,4 +168,44 @@ export interface PaginatedStudentClasses {
   page: number;
   page_size: number;
   total_pages: number;
+}
+
+// Chat types
+export interface MessageSource {
+  document_id?: number;
+  document_filename?: string;
+  chunk_index?: number;
+  score: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources: MessageSource[];
+  created_at: string;
+}
+
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  class_id: string | null;
+  created_at: string;
+  ended_at: string | null;
+}
+
+export interface ChatSessionDetail extends ChatSession {
+  messages: ChatMessage[];
+}
+
+export interface ChatResponse {
+  user_message: ChatMessage;
+  assistant_message: ChatMessage;
+  had_context: boolean;
+  retrieved_chunks: number;
+  used_chunks: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
 }
