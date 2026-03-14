@@ -1,0 +1,4 @@
+# Local embedding model (sentence-transformers + CPU torch)
+# Installed separately in Docker so we can use the CPU-only torch index,
+# avoiding the ~2.3 GB NVIDIA CUDA wheels.
+sentence-transformers>=2.2.0

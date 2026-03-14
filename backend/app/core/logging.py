@@ -40,13 +40,16 @@ def setup_logging(
     console_handler.setFormatter(log_format)
     logger.addHandler(console_handler)
 
-    # File handler with rotation
-    file_handler = RotatingFileHandler(
-        log_dir / f"{app_name}.log", maxBytes=10_485_760, backupCount=5  # 10MB
-    )
-    file_handler.setLevel(getattr(logging, log_level))
-    file_handler.setFormatter(log_format)
-    logger.addHandler(file_handler)
+    # File handler with rotation (skipped if log directory is not writable)
+    try:
+        file_handler = RotatingFileHandler(
+            log_dir / f"{app_name}.log", maxBytes=10_485_760, backupCount=5  # 10MB
+        )
+        file_handler.setLevel(getattr(logging, log_level))
+        file_handler.setFormatter(log_format)
+        logger.addHandler(file_handler)
+    except (PermissionError, OSError):
+        pass
 
     return logger
 

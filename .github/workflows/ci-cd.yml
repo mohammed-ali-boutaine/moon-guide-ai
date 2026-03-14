@@ -70,7 +70,9 @@ jobs:
         working-directory: backend
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+            -r requirements-ml.txt
 
       # Run linting tools to enforce code style & quality
       #  linting checks

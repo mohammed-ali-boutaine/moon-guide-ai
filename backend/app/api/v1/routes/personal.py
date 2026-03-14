@@ -4,7 +4,7 @@ Personal document endpoints.
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, Depends, BackgroundTasks, UploadFile, File, Form, Response
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.database import get_db
@@ -58,7 +58,7 @@ def get_personal_documents(
     return DocumentListResponse(documents=docs, total=len(docs))
 
 
-@router.delete("/{document_id}", status_code=204)
+@router.delete("/{document_id}", status_code=204, response_class=Response)
 def delete_document(
     document_id: int,
     current_user: CurrentUser,
