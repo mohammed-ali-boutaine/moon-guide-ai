@@ -12,6 +12,7 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.chat_session import ChatSession
     from app.models.class_student import ClassStudent
+    from app.models.quiz import Quiz
     from app.models.user import User
 
 
@@ -46,5 +47,8 @@ class Class(Base):
         back_populates="class_", cascade="all, delete-orphan", overlaps="students"
     )
     chat_sessions: Mapped[list["ChatSession"]] = relationship(
+        back_populates="class_", cascade="all, delete-orphan"
+    )
+    quizzes: Mapped[list["Quiz"]] = relationship(
         back_populates="class_", cascade="all, delete-orphan"
     )
