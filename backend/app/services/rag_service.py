@@ -20,8 +20,9 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-import google.generativeai as genai
-from google.api_core import exceptions as gapi_exceptions
+from google import genai
+from google.genai import types as genai_types
+from google.genai import errors as genai_errors
 
 from app.core.config import settings
 from app.core.logging import logger
@@ -83,23 +84,16 @@ class RAGResult:
 
 # ── Gemini client (lazy init) ─────────────────────────────────────────────────
 
-_genai_configured = False
+_gemini_client: genai.Client | None = None
 
 
-def _get_gemini_model() -> genai.GenerativeModel:
-    global _genai_configured
-    if not _genai_configured:
+def _get_gemini_client() -> genai.Client:
+    global _gemini_client
+    if _gemini_client is None:
         if not settings.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY is not configured.")
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        _genai_configured = True
-    return genai.GenerativeModel(
-        model_name=settings.GEMINI_MODEL,
-        generation_config=genai.GenerationConfig(
-            max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS,
-            temperature=settings.GEMINI_TEMPERATURE,
-        ),
-    )
+        _gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    return _gemini_client
 
 
 # ── Step 1: Retrieve ──────────────────────────────────────────────────────────
@@ -266,13 +260,20 @@ def _call_gemini(prompt: str) -> tuple[str, int, int, int]:
     Raises:
         RuntimeError: if all retries are exhausted.
     """
-    model = _get_gemini_model()
+    client = _get_gemini_client()
     last_exc: Exception | None = None
     delay = settings.GEMINI_RETRY_DELAY
 
     for attempt in range(1, settings.GEMINI_MAX_RETRIES + 1):
         try:
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS,
+                    temperature=settings.GEMINI_TEMPERATURE,
+                ),
+            )
 
             answer = response.text or ""
 
@@ -288,16 +289,17 @@ def _call_gemini(prompt: str) -> tuple[str, int, int, int]:
             )
             return answer, prompt_tokens, completion_tokens, total_tokens
 
-        except gapi_exceptions.ResourceExhausted as exc:
-            logger.warning("Gemini rate limit (attempt %d/%d): %s", attempt, settings.GEMINI_MAX_RETRIES, exc)
+        except genai_errors.ClientError as exc:
+            # 429 rate limit or other 4xx — retry for rate limits, raise for others
+            if getattr(exc, "status_code", None) == 429:
+                logger.warning("Gemini rate limit (attempt %d/%d): %s", attempt, settings.GEMINI_MAX_RETRIES, exc)
+                last_exc = exc
+            else:
+                logger.error("Gemini client error (non-retryable): %s", exc)
+                raise RuntimeError(f"Gemini API error: {exc}") from exc
+        except genai_errors.ServerError as exc:
+            logger.warning("Gemini server error (attempt %d/%d): %s", attempt, settings.GEMINI_MAX_RETRIES, exc)
             last_exc = exc
-        except gapi_exceptions.ServiceUnavailable as exc:
-            logger.warning("Gemini unavailable (attempt %d/%d): %s", attempt, settings.GEMINI_MAX_RETRIES, exc)
-            last_exc = exc
-        except gapi_exceptions.GoogleAPICallError as exc:
-            # Non-retryable API error (e.g. invalid key, bad request)
-            logger.error("Gemini API error (non-retryable): %s", exc)
-            raise RuntimeError(f"Gemini API error: {exc}") from exc
         except Exception as exc:
             logger.error("Gemini unexpected error (attempt %d/%d): %s", attempt, settings.GEMINI_MAX_RETRIES, exc)
             last_exc = exc

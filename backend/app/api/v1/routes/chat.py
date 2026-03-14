@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DBSession, selectinload
 
@@ -339,15 +340,17 @@ async def send_message(
 @router.delete(
     "/sessions/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
     summary="End a chat session",
 )
 def end_session(
     session_id: uuid.UUID,
     current_user: CurrentUser,
     db: Annotated[DBSession, Depends(get_db)],
-) -> None:
+) -> Response:
     """Soft-delete a session by setting `ended_at` to now."""
     session = _get_session_or_404(session_id, current_user.id, db)
     session.ended_at = datetime.now(timezone.utc)
     db.commit()
     logger.info("Ended chat session %s for user %s", session_id, current_user.email)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
