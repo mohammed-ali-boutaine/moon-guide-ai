@@ -435,6 +435,15 @@ def extract_and_embed(self, document_id: int, file_path: str, file_type: str, db
         db.commit()
 
         logger.info("[Celery] Document %d is now READY (chunks=%d, vectors=%d)", document_id, len(db_chunks), vectors_count)
+
+        # 6. Dispatch concept extraction as a separate task (non-blocking)
+        chunk_texts = [c.chunk_text for c in db_chunks]
+        extract_concepts_task.delay(
+            document_id=document_id,
+            chunk_texts=chunk_texts,
+            db_url=str(db_url),
+        )
+
         return {"chunks_count": len(db_chunks), "vectors_count": vectors_count}
 
     except Exception as exc:
@@ -449,6 +458,53 @@ def extract_and_embed(self, document_id: int, file_path: str, file_type: str, db
             db.commit()
         except Exception as db_exc:
             logger.error("[Celery] Failed to update doc status: %s", db_exc)
+        raise self.retry(exc=exc)
+    finally:
+        db.close()
+        engine.dispose()
+
+
+@celery.task(
+    name="app.services.document_service.extract_concepts_task",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=60,
+)
+def extract_concepts_task(self, document_id: int, chunk_texts: list[str], db_url: str) -> dict:
+    """
+    Celery task: run NLP concept extraction on already-chunked document text.
+
+    Dispatched automatically by extract_and_embed after the document is READY.
+
+    Args:
+        document_id: PK of the Document row.
+        chunk_texts:  Plain-text content of each chunk.
+        db_url:       SQLAlchemy database URL.
+
+    Returns:
+        Dict with concepts_count.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.services.concept_service import extract_and_store_concepts
+
+    engine = create_engine(str(db_url))
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+
+    logger.info("[Celery] Starting extract_concepts_task for doc=%d (%d chunks)", document_id, len(chunk_texts))
+
+    try:
+        concepts = extract_and_store_concepts(
+            document_id=document_id,
+            chunks=chunk_texts,
+            db=db,
+        )
+        logger.info("[Celery] Extracted %d concepts for doc=%d", len(concepts), document_id)
+        return {"concepts_count": len(concepts)}
+    except Exception as exc:
+        logger.error("[Celery] extract_concepts_task FAILED for doc=%d: %s", document_id, exc, exc_info=True)
         raise self.retry(exc=exc)
     finally:
         db.close()

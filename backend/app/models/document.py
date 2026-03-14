@@ -8,6 +8,9 @@ from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
+if TYPE_CHECKING:
+    from app.models.document_concept import DocumentConcept
+
 
 class ScopeEnum(str, enum.Enum):
     personal = "personal"
@@ -58,3 +61,4 @@ class Document(Base):
     file_size_bytes = Column(Integer, nullable=True)
 
     chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
+    concepts = relationship("DocumentConcept", back_populates="document", cascade="all, delete-orphan")

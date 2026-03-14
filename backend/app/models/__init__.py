@@ -5,6 +5,7 @@ from app.models.class_ import Class
 from app.models.class_student import ClassStudent
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.document_concept import DocumentConcept, ConceptSource
 from app.models.question import Question, QuestionType
 from app.models.quiz import Quiz, QuizStatus
 from app.models.role import Role, RoleName
@@ -20,8 +21,10 @@ __all__ = [
     "ChatSession",
     "Class",
     "ClassStudent",
+    "ConceptSource",
     "Document",
     "DocumentChunk",
+    "DocumentConcept",
     "Question",
     "QuestionType",
     "Quiz",

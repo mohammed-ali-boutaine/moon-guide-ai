@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir --no-compile \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     -r requirements-ml.txt
 
+# Download spaCy English model for concept extraction
+RUN python -m spacy download en_core_web_sm
+
 # Copy application code
 COPY . .
 
