@@ -9,6 +9,7 @@ celery = Celery(
 
 celery.conf.task_routes = {
     "app.services.document_service.*": {"queue": "documents"},
+    "app.services.quiz_service.*": {"queue": "quiz"},
 }
 
 celery.conf.update(

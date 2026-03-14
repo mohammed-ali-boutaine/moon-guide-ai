@@ -8,6 +8,7 @@ from app.models.document_chunk import DocumentChunk
 from app.models.document_concept import DocumentConcept, ConceptSource
 from app.models.question import Question, QuestionType
 from app.models.quiz import Quiz, QuizStatus
+from app.models.quiz_job import QuizJob, JobStatus
 from app.models.role import Role, RoleName
 from app.models.session import Session
 from app.models.user import User
@@ -25,9 +26,11 @@ __all__ = [
     "Document",
     "DocumentChunk",
     "DocumentConcept",
+    "JobStatus",
     "Question",
     "QuestionType",
     "Quiz",
+    "QuizJob",
     "QuizStatus",
     "Role",
     "RoleName",
