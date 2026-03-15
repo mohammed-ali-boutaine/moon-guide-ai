@@ -1,0 +1,555 @@
+"""
+services/quiz_service.py
+
+Quiz generation pipeline:
+  1. Load document chunks from Postgres
+  2. Get top extracted concepts (spaCy/TextRank/TF-IDF) from Postgres
+  3. Build a structured Gemini prompt requesting JSON output
+  4. Call Gemini LLM (with retries)
+  5. Parse and structurally validate JSON response
+  6. LLM re-check: ask Gemini to verify each answer is correct
+  7. Deduplicate questions (normalized text fingerprint)
+  8. Persist Quiz + Questions + Answers to Postgres
+  9. Update QuizJob status (completed / failed)
+
+Cost monitoring: total tokens logged and stored on QuizJob.
+"""
+from __future__ import annotations
+
+import json
+import re
+import time
+import uuid
+from typing import Any
+
+from app.celery_app import celery
+from app.core.config import settings
+from app.core.logging import logger
+
+# ── Difficulty prompts ────────────────────────────────────────────────────────
+
+_DIFFICULTY_INSTRUCTIONS: dict[str, str] = {
+    "easy": (
+        "Questions should test basic recall and recognition of key facts and definitions. "
+        "Use simple, direct language. Distractors (wrong answers) should be clearly incorrect."
+    ),
+    "medium": (
+        "Questions should require understanding and application of concepts. "
+        "Include some interpretation and inference. Distractors should be plausible but wrong."
+    ),
+    "hard": (
+        "Questions should require analysis, synthesis, and critical thinking. "
+        "Test nuanced understanding and edge cases. Distractors should be very plausible. "
+        "Avoid trivial questions."
+    ),
+}
+
+# ── Prompt templates ──────────────────────────────────────────────────────────
+
+_GENERATION_SYSTEM = """\
+You are an expert educator creating a quiz from a document.
+Your task is to generate high-quality quiz questions that accurately test knowledge
+of the document content. Be precise and ensure all answers are factually correct
+based solely on the provided document excerpts.
+"""
+
+_GENERATION_PROMPT = """\
+## Document Excerpts
+<context>
+{context}
+</context>
+
+## Key Concepts
+{concepts}
+
+## Task
+Generate exactly {num_questions} quiz questions at **{difficulty}** difficulty.
+
+{difficulty_instructions}
+
+Mix MCQ (multiple choice, 4 options, exactly 1 correct) and TrueFalse questions.
+- For MCQ: provide exactly 4 answer options with exactly one marked correct.
+- For TrueFalse: provide exactly 2 options ("True" / "False") with exactly one marked correct.
+
+Rules:
+- Questions must be based solely on the document content above.
+- Do not repeat the same question with different wording.
+- Each question must have exactly one correct answer.
+- Questions must be clear and unambiguous.
+
+Output ONLY valid JSON with no extra text, markdown, or explanation:
+{{
+  "questions": [
+    {{
+      "type": "MCQ",
+      "text": "Question text?",
+      "answers": [
+        {{"text": "Correct answer", "is_correct": true}},
+        {{"text": "Wrong answer B", "is_correct": false}},
+        {{"text": "Wrong answer C", "is_correct": false}},
+        {{"text": "Wrong answer D", "is_correct": false}}
+      ]
+    }},
+    {{
+      "type": "TrueFalse",
+      "text": "A statement about the document.",
+      "answers": [
+        {{"text": "True", "is_correct": true}},
+        {{"text": "False", "is_correct": false}}
+      ]
+    }}
+  ]
+}}
+"""
+
+_RECHECK_PROMPT = """\
+You are a fact-checker reviewing quiz questions generated from a document.
+
+## Document Excerpts
+<context>
+{context}
+</context>
+
+## Questions to Verify
+{questions_json}
+
+## Task
+For each question, verify whether the marked correct answer is actually correct
+based ONLY on the document content above.
+
+Output ONLY valid JSON:
+{{
+  "results": [
+    {{"index": 0, "valid": true}},
+    {{"index": 1, "valid": false, "reason": "brief reason why it is wrong"}}
+  ]
+}}
+"""
+
+
+# ── Gemini helper (reuses pattern from rag_service) ───────────────────────────
+
+def _call_gemini_json(prompt: str, temperature: float = 0.3) -> tuple[str, int, int, int]:
+    """
+    Call Gemini and return (raw_text, prompt_tokens, completion_tokens, total_tokens).
+    Uses lower temperature than chat for deterministic JSON output.
+    """
+    from google import genai
+    from google.genai import types as genai_types
+    from google.genai import errors as genai_errors
+
+    if not settings.GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY is not configured.")
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    delay = settings.GEMINI_RETRY_DELAY
+    last_exc: Exception | None = None
+
+    for attempt in range(1, settings.GEMINI_MAX_RETRIES + 1):
+        try:
+            response = client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=_GENERATION_SYSTEM + "\n\n" + prompt,
+                config=genai_types.GenerateContentConfig(
+                    max_output_tokens=4096,
+                    temperature=temperature,
+                ),
+            )
+            text = response.text or ""
+            usage = getattr(response, "usage_metadata", None)
+            pt = getattr(usage, "prompt_token_count", 0) or 0
+            ct = getattr(usage, "candidates_token_count", 0) or 0
+            tt = getattr(usage, "total_token_count", 0) or (pt + ct)
+            logger.info(
+                "Gemini quiz call ok: attempt=%d tokens(p=%d c=%d t=%d)",
+                attempt, pt, ct, tt,
+            )
+            return text, pt, ct, tt
+        except genai_errors.ClientError as exc:
+            if getattr(exc, "status_code", None) == 429:
+                logger.warning("Gemini rate limit (attempt %d): %s", attempt, exc)
+                last_exc = exc
+            else:
+                raise RuntimeError(f"Gemini client error: {exc}") from exc
+        except Exception as exc:
+            logger.warning("Gemini error (attempt %d): %s", attempt, exc)
+            last_exc = exc
+
+        if attempt < settings.GEMINI_MAX_RETRIES:
+            time.sleep(delay)
+            delay *= 2
+
+    raise RuntimeError(
+        f"Gemini failed after {settings.GEMINI_MAX_RETRIES} attempts. Last: {last_exc}"
+    )
+
+
+# ── JSON extraction ───────────────────────────────────────────────────────────
+
+def _extract_json(text: str) -> dict:
+    """
+    Extract JSON from Gemini response, stripping markdown code fences if present.
+    """
+    # Strip markdown fences
+    text = text.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return json.loads(text.strip())
+
+
+# ── Structural validation ─────────────────────────────────────────────────────
+
+_VALID_TYPES = {"MCQ", "TrueFalse"}
+
+
+def _validate_question(q: dict) -> bool:
+    """
+    Return True if a question dict has the required structure:
+    - type is MCQ or TrueFalse
+    - MCQ: exactly 4 answers, exactly 1 correct
+    - TrueFalse: exactly 2 answers, exactly 1 correct, texts are "True"/"False"
+    """
+    q_type = q.get("type")
+    if q_type not in _VALID_TYPES:
+        return False
+    if not q.get("text", "").strip():
+        return False
+
+    answers = q.get("answers", [])
+    correct_count = sum(1 for a in answers if a.get("is_correct") is True)
+
+    if correct_count != 1:
+        return False
+
+    if q_type == "MCQ":
+        return len(answers) == 4
+    else:  # TrueFalse
+        if len(answers) != 2:
+            return False
+        texts = {a.get("text", "").strip() for a in answers}
+        return texts == {"True", "False"}
+
+
+# ── Deduplication ─────────────────────────────────────────────────────────────
+
+def _fingerprint(text: str) -> str:
+    """Normalize question text for deduplication."""
+    return re.sub(r"\W+", "", text.lower())
+
+
+def _deduplicate(questions: list[dict]) -> list[dict]:
+    """Remove questions with duplicate fingerprints, keeping first occurrence."""
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for q in questions:
+        fp = _fingerprint(q.get("text", ""))
+        if fp and fp not in seen:
+            seen.add(fp)
+            unique.append(q)
+    return unique
+
+
+# ── LLM re-check ─────────────────────────────────────────────────────────────
+
+def _recheck_answers(
+    questions: list[dict],
+    context: str,
+) -> list[dict]:
+    """
+    Ask Gemini to verify each answer is correct.
+    Returns only the questions that pass validation.
+    """
+    if not questions:
+        return questions
+
+    questions_json = json.dumps(
+        [{"index": i, "type": q["type"], "text": q["text"], "answers": q["answers"]}
+         for i, q in enumerate(questions)],
+        indent=2,
+    )
+    prompt = _RECHECK_PROMPT.format(
+        context=context,
+        questions_json=questions_json,
+    )
+
+    try:
+        raw, pt, ct, tt = _call_gemini_json(prompt, temperature=0.1)
+        data = _extract_json(raw)
+        results = data.get("results", [])
+        valid_indices = {r["index"] for r in results if r.get("valid") is True}
+        invalid = [r for r in results if not r.get("valid")]
+        for r in invalid:
+            logger.info(
+                "Quiz re-check: question %d rejected — %s",
+                r["index"],
+                r.get("reason", "no reason"),
+            )
+        logger.info(
+            "Quiz re-check: %d/%d questions passed (tokens: %d)",
+            len(valid_indices), len(questions), tt,
+        )
+        return [q for i, q in enumerate(questions) if i in valid_indices]
+    except Exception as exc:
+        # Re-check failure is non-fatal: log and return all questions
+        logger.warning("Quiz re-check failed (non-fatal): %s", exc)
+        return questions
+
+
+# ── DB persistence ────────────────────────────────────────────────────────────
+
+def _persist_quiz(
+    *,
+    db,
+    document_id: int,
+    class_id: str | None,
+    title: str,
+    difficulty: str,
+    questions: list[dict],
+) -> int:
+    """
+    Create Quiz + Questions + Answers in DB. Returns quiz.id.
+    """
+    from app.models.answer import Answer
+    from app.models.question import Question, QuestionType
+    from app.models.quiz import Quiz, QuizStatus
+
+    quiz = Quiz(
+        class_id=class_id,
+        document_id=document_id,
+        title=title,
+        difficulty=difficulty,
+        status=QuizStatus.draft,
+    )
+    db.add(quiz)
+    db.flush()  # get quiz.id
+
+    for order, q_data in enumerate(questions, start=1):
+        q_type = (
+            QuestionType.mcq
+            if q_data["type"] == "MCQ"
+            else QuestionType.true_false
+        )
+        question = Question(
+            quiz_id=quiz.id,
+            type=q_type,
+            text=q_data["text"].strip(),
+            order=order,
+        )
+        db.add(question)
+        db.flush()  # get question.id
+
+        for ans_order, a_data in enumerate(q_data["answers"], start=1):
+            answer = Answer(
+                question_id=question.id,
+                text=a_data["text"].strip(),
+                is_correct=bool(a_data["is_correct"]),
+                order=ans_order,
+            )
+            db.add(answer)
+
+    db.commit()
+    logger.info(
+        "Quiz persisted: quiz_id=%d document_id=%d questions=%d",
+        quiz.id, document_id, len(questions),
+    )
+    return quiz.id
+
+
+# ── Celery task ───────────────────────────────────────────────────────────────
+
+@celery.task(
+    name="app.services.quiz_service.generate_quiz_task",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=30,
+)
+def generate_quiz_task(
+    self,
+    job_id: str,
+    document_id: int,
+    num_questions: int,
+    difficulty: str,
+    db_url: str,
+) -> dict:
+    """
+    Celery task: generate a quiz from a document using Gemini.
+
+    Steps:
+      1. Load document chunks from Postgres
+      2. Get top concepts from Postgres
+      3. Generate questions via Gemini
+      4. Parse + structurally validate
+      5. LLM re-check answers
+      6. Deduplicate
+      7. Persist quiz to DB
+      8. Update QuizJob status
+
+    Args:
+        job_id:        UUID string of the QuizJob row.
+        document_id:   PK of the Document.
+        num_questions: Target question count (5–50).
+        difficulty:    "easy" | "medium" | "hard".
+        db_url:        SQLAlchemy database URL.
+    """
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models.document import Document
+    from app.models.document_chunk import DocumentChunk
+    from app.models.document_concept import DocumentConcept
+    from app.models.quiz_job import JobStatus, QuizJob
+
+    engine = create_engine(str(db_url))
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+
+    logger.info(
+        "[Quiz] Starting generate_quiz_task: job=%s doc=%d n=%d diff=%s",
+        job_id, document_id, num_questions, difficulty,
+    )
+
+    try:
+        # ── Mark job as processing ────────────────────────────────────────────
+        job = db.scalar(select(QuizJob).where(QuizJob.id == uuid.UUID(job_id)))
+        if job is None:
+            logger.error("[Quiz] Job %s not found", job_id)
+            return {"error": "job not found"}
+
+        job.status = JobStatus.processing
+        db.commit()
+
+        # ── Step 1: Load document ─────────────────────────────────────────────
+        doc = db.scalar(select(Document).where(Document.id == document_id))
+        if doc is None:
+            raise ValueError(f"Document {document_id} not found")
+
+        class_id_str: str | None = str(doc.class_id) if doc.class_id else None
+
+        # ── Step 2: Load chunks ───────────────────────────────────────────────
+        chunks = db.scalars(
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == document_id)
+            .order_by(DocumentChunk.chunk_index)
+        ).all()
+
+        if not chunks:
+            raise ValueError(f"Document {document_id} has no chunks — is it processed?")
+
+        # Build context: use up to 12 000 chars (same as RAG pipeline)
+        context_parts: list[str] = []
+        total_chars = 0
+        for chunk in chunks:
+            text = chunk.chunk_text.strip()
+            if total_chars + len(text) > 12000:
+                remaining = 12000 - total_chars
+                if remaining > 200:
+                    context_parts.append(text[:remaining] + "…")
+                break
+            context_parts.append(text)
+            total_chars += len(text)
+
+        context = "\n\n---\n\n".join(context_parts)
+
+        # ── Step 3: Load top concepts ─────────────────────────────────────────
+        concept_rows = db.scalars(
+            select(DocumentConcept)
+            .where(DocumentConcept.document_id == document_id)
+            .order_by(DocumentConcept.score.desc())
+            .limit(25)
+        ).all()
+
+        concepts_str = ", ".join(c.term for c in concept_rows) if concept_rows else "N/A"
+
+        # ── Step 4: Build prompt and call Gemini ──────────────────────────────
+        # Ask for more questions than needed to allow for filtering
+        target = min(num_questions + max(5, num_questions // 3), 50)
+
+        prompt = _GENERATION_PROMPT.format(
+            context=context,
+            concepts=concepts_str,
+            num_questions=target,
+            difficulty=difficulty,
+            difficulty_instructions=_DIFFICULTY_INSTRUCTIONS[difficulty],
+        )
+
+        raw_text, prompt_tokens, completion_tokens, total_tokens = _call_gemini_json(
+            prompt, temperature=0.4
+        )
+
+        # ── Step 5: Parse JSON ────────────────────────────────────────────────
+        try:
+            data = _extract_json(raw_text)
+            raw_questions: list[dict[str, Any]] = data.get("questions", [])
+        except (json.JSONDecodeError, KeyError) as exc:
+            raise ValueError(f"Gemini returned invalid JSON: {exc}") from exc
+
+        logger.info("[Quiz] Gemini returned %d raw questions", len(raw_questions))
+
+        # ── Step 6: Structural validation ─────────────────────────────────────
+        valid_questions = [q for q in raw_questions if _validate_question(q)]
+        logger.info(
+            "[Quiz] %d/%d questions passed structural validation",
+            len(valid_questions), len(raw_questions),
+        )
+
+        # ── Step 7: LLM re-check ──────────────────────────────────────────────
+        verified_questions = _recheck_answers(valid_questions, context)
+
+        # ── Step 8: Deduplicate ───────────────────────────────────────────────
+        deduped = _deduplicate(verified_questions)
+        logger.info("[Quiz] %d questions after deduplication", len(deduped))
+
+        # Trim to requested count
+        final_questions = deduped[:num_questions]
+
+        if not final_questions:
+            raise ValueError(
+                "No valid questions could be generated. "
+                "Try a different document or lower the question count."
+            )
+
+        # ── Step 9: Persist ───────────────────────────────────────────────────
+        title = f"Quiz — {doc.filename}"
+        quiz_id = _persist_quiz(
+            db=db,
+            document_id=document_id,
+            class_id=class_id_str,
+            title=title,
+            difficulty=difficulty,
+            questions=final_questions,
+        )
+
+        # ── Update job: completed ─────────────────────────────────────────────
+        job.status = JobStatus.completed
+        job.quiz_id = quiz_id
+        job.total_tokens = total_tokens
+        db.commit()
+
+        logger.info(
+            "[Quiz] Job %s completed: quiz_id=%d questions=%d tokens=%d",
+            job_id, quiz_id, len(final_questions), total_tokens,
+        )
+        return {
+            "quiz_id": quiz_id,
+            "questions_count": len(final_questions),
+            "total_tokens": total_tokens,
+        }
+
+    except Exception as exc:
+        logger.error("[Quiz] generate_quiz_task FAILED: job=%s error=%s", job_id, exc, exc_info=True)
+
+        # Update job to failed
+        try:
+            job = db.scalar(select(QuizJob).where(QuizJob.id == uuid.UUID(job_id)))
+            if job:
+                job.status = JobStatus.failed
+                job.error_message = str(exc)[:1000]
+                db.commit()
+        except Exception as db_exc:
+            logger.error("[Quiz] Failed to update job status: %s", db_exc)
+
+        raise self.retry(exc=exc)
+
+    finally:
+        db.close()
+        engine.dispose()

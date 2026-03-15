@@ -11,7 +11,9 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.class_ import Class
+    from app.models.document import Document
     from app.models.question import Question
+    from app.models.quiz_assignment import QuizAssignment
 
 
 class QuizStatus(str, enum.Enum):
@@ -24,14 +26,21 @@ class Quiz(Base):
     __tablename__ = "quizzes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    class_id: Mapped[str] = mapped_column(
+    class_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("classes.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+        index=True,
+    )
+    document_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    difficulty: Mapped[str | None] = mapped_column(String(10), nullable=True)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[QuizStatus] = mapped_column(
@@ -48,9 +57,14 @@ class Quiz(Base):
     )
 
     # Relationships
-    class_: Mapped["Class"] = relationship(back_populates="quizzes")
+    class_: Mapped["Class | None"] = relationship(back_populates="quizzes")
+    document: Mapped["Document | None"] = relationship(foreign_keys=[document_id])
     questions: Mapped[list["Question"]] = relationship(
         back_populates="quiz",
         cascade="all, delete-orphan",
         order_by="Question.order",
+    )
+    assignments: Mapped[list["QuizAssignment"]] = relationship(
+        back_populates="quiz",
+        cascade="all, delete-orphan",
     )

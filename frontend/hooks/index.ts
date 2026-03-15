@@ -16,3 +16,10 @@ export {
   useSendMessage,
   useEndChatSession,
 } from './use-chat';
+export {
+  useGenerateQuiz,
+  useQuizJob,
+  useQuiz,
+  useCreateQuiz,
+  useUpdateQuiz,
+} from './use-quiz';
