@@ -35,13 +35,16 @@ from app.models.quiz import Quiz, QuizStatus
 from app.models.quiz_assignment import AssignmentStatus, QuizAssignment
 from app.models.quiz_attempt import AttemptStatus, QuizAttempt
 from app.models.quiz_job import JobStatus, QuizJob
+from app.models.student_answer import StudentAnswer
 from app.schemas.quiz import (
     QuizAttemptStartResponse,
+    QuizAttemptSubmitResponse,
     QuizCreateRequest,
     QuizGenerateRequest,
     QuizJobDetailResponse,
     QuizJobResponse,
     QuizResponse,
+    QuizSubmitRequest,
     QuizUpdateRequest,
 )
 from app.schemas.quiz_assignment import (
@@ -698,4 +701,125 @@ def start_quiz_attempt(
         status=attempt.status,
         started_at=attempt.started_at,
         expires_at=expires_at,
+    )
+
+
+# ── POST /quiz/{attempt_id}/submit ─────────────────────────────────────────────
+
+@router.post(
+    "/{attempt_id}/submit",
+    response_model=QuizAttemptSubmitResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Submit a quiz attempt (student)",
+)
+def submit_quiz_attempt(
+    attempt_id: int,
+    body: QuizSubmitRequest,
+    current_user: StudentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> QuizAttemptSubmitResponse:
+    """
+    Submit a quiz attempt with all student answers.
+
+    - The attempt must belong to the authenticated student.
+    - Cannot resubmit an already-submitted attempt (returns **409**).
+    - If the quiz has a `duration_minutes` limit and the attempt has expired,
+      the submission is still accepted but flagged in the log.
+    - Each answer is upserted: safe to call after partial saves.
+    - Dispatches a background Celery task to auto-correct MCQ/TrueFalse answers
+      and send an in-app notification with results.
+    """
+    # ── 1. Load and validate the attempt ──────────────────────────────────────
+    attempt = db.scalar(
+        select(QuizAttempt).where(QuizAttempt.id == attempt_id)
+    )
+    if attempt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attempt not found.")
+
+    if str(attempt.student_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This attempt does not belong to you.",
+        )
+
+    if attempt.status == AttemptStatus.submitted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "This attempt has already been submitted.",
+                "attempt_id": attempt_id,
+                "submitted_at": attempt.submitted_at.isoformat() if attempt.submitted_at else None,
+            },
+        )
+
+    # ── 2. Warn if submission is past the time limit ───────────────────────────
+    quiz = db.scalar(select(Quiz).where(Quiz.id == attempt.quiz_id))
+    if quiz and quiz.duration_minutes is not None:
+        deadline = attempt.started_at + timedelta(minutes=quiz.duration_minutes)
+        now_utc = datetime.now(timezone.utc)
+        if now_utc > deadline:
+            logger.warning(
+                "Late submission: attempt=%d student=%s exceeded timer by %.0fs",
+                attempt_id,
+                current_user.email,
+                (now_utc - deadline).total_seconds(),
+            )
+
+    # ── 3. Upsert student answers ──────────────────────────────────────────────
+    total_questions = db.scalar(
+        select(func.count()).select_from(Question).where(Question.quiz_id == attempt.quiz_id)
+    ) or 0
+
+    for ans_data in body.answers:
+        existing = db.scalar(
+            select(StudentAnswer).where(
+                StudentAnswer.attempt_id == attempt_id,
+                StudentAnswer.question_id == ans_data.question_id,
+            )
+        )
+        if existing:
+            existing.answer_text = ans_data.answer_text
+            existing.is_correct = None  # reset until correction runs
+        else:
+            db.add(
+                StudentAnswer(
+                    attempt_id=attempt_id,
+                    question_id=ans_data.question_id,
+                    answer_text=ans_data.answer_text,
+                    is_correct=None,
+                )
+            )
+
+    # ── 4. Mark as submitted ───────────────────────────────────────────────────
+    submitted_at = datetime.now(timezone.utc)
+    attempt.status = AttemptStatus.submitted
+    attempt.submitted_at = submitted_at
+    db.commit()
+
+    answers_recorded = db.scalar(
+        select(func.count()).select_from(StudentAnswer).where(
+            StudentAnswer.attempt_id == attempt_id
+        )
+    ) or 0
+
+    # ── 5. Dispatch correction task ────────────────────────────────────────────
+    from app.services.quiz_service import correct_quiz_attempt_task
+
+    correct_quiz_attempt_task.delay(
+        attempt_id=attempt_id,
+        db_url=settings.DATABASE_URL,
+    )
+
+    logger.info(
+        "Quiz attempt submitted: attempt=%d quiz=%d student=%s answers=%d",
+        attempt_id, attempt.quiz_id, current_user.email, answers_recorded,
+    )
+
+    return QuizAttemptSubmitResponse(
+        attempt_id=attempt_id,
+        quiz_id=attempt.quiz_id,
+        status=attempt.status,
+        submitted_at=submitted_at,
+        total_questions=total_questions,
+        answers_recorded=answers_recorded,
     )

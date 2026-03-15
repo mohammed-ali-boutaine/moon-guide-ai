@@ -553,3 +553,169 @@ def generate_quiz_task(
     finally:
         db.close()
         engine.dispose()
+
+
+# ── Celery task: auto-correct a submitted attempt ─────────────────────────────
+
+@celery.task(
+    name="app.services.quiz_service.correct_quiz_attempt_task",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=10,
+)
+def correct_quiz_attempt_task(self, attempt_id: int, db_url: str) -> dict:
+    """
+    Celery task: auto-correct a quiz attempt.
+
+    Steps:
+      1. Load the attempt and its student answers.
+      2. Load all questions for the quiz with their correct answers.
+      3. For MCQ / TrueFalse: compare student answer_text against the
+         correct Answer row (is_correct=True) — case-insensitive.
+      4. For ShortAnswer: leave is_correct=None (requires manual grading).
+      5. Compute score = auto-corrected_correct / auto-correctable_total * 100.
+         Score is None when there are no auto-correctable questions.
+      6. Persist is_correct flags + score on the attempt.
+      7. Create an in-app Notification for the student.
+
+    Note: email confirmation is a future feature (no email provider configured yet).
+    """
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models.answer import Answer
+    from app.models.notification import Notification
+    from app.models.question import Question, QuestionType
+    from app.models.quiz import Quiz
+    from app.models.quiz_attempt import AttemptStatus, QuizAttempt
+    from app.models.student_answer import StudentAnswer
+    from app.models.user import User
+
+    engine = create_engine(str(db_url))
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+
+    logger.info("[Correct] Starting correction for attempt=%d", attempt_id)
+
+    try:
+        # ── 1. Load attempt ───────────────────────────────────────────────────
+        attempt = db.scalar(
+            select(QuizAttempt).where(QuizAttempt.id == attempt_id)
+        )
+        if attempt is None:
+            logger.error("[Correct] Attempt %d not found", attempt_id)
+            return {"error": "attempt not found"}
+
+        if attempt.status != AttemptStatus.submitted:
+            logger.warning(
+                "[Correct] Attempt %d is not submitted (status=%s) — skipping",
+                attempt_id, attempt.status,
+            )
+            return {"skipped": True}
+
+        # ── 2. Load all quiz questions with their correct answers ──────────────
+        questions = db.scalars(
+            select(Question).where(Question.quiz_id == attempt.quiz_id)
+        ).all()
+
+        # Map question_id → correct Answer text (MCQ/TrueFalse only)
+        correct_text: dict[int, str] = {}
+        for q in questions:
+            if q.type in (QuestionType.mcq, QuestionType.true_false):
+                correct_ans = db.scalar(
+                    select(Answer).where(
+                        Answer.question_id == q.id,
+                        Answer.is_correct.is_(True),
+                    )
+                )
+                if correct_ans:
+                    correct_text[q.id] = correct_ans.text.strip().lower()
+
+        auto_correctable = set(correct_text.keys())
+
+        # ── 3. Load and correct student answers ───────────────────────────────
+        student_answers = db.scalars(
+            select(StudentAnswer).where(StudentAnswer.attempt_id == attempt_id)
+        ).all()
+
+        correct_count = 0
+        for sa in student_answers:
+            if sa.question_id in auto_correctable:
+                submitted = (sa.answer_text or "").strip().lower()
+                sa.is_correct = submitted == correct_text[sa.question_id]
+                if sa.is_correct:
+                    correct_count += 1
+            # ShortAnswer: is_correct stays None (manual grading)
+
+        # ── 4. Compute score ──────────────────────────────────────────────────
+        # Count auto-correctable questions that the student answered
+        answered_auto = sum(
+            1 for sa in student_answers if sa.question_id in auto_correctable
+        )
+        if auto_correctable:
+            # Score over the total auto-correctable questions in the quiz
+            attempt.score = round(correct_count / len(auto_correctable) * 100, 2)
+        # else: all ShortAnswer — score stays None until manual grading
+
+        db.flush()
+
+        # ── 5. In-app notification for the student ────────────────────────────
+        quiz = db.scalar(select(Quiz).where(Quiz.id == attempt.quiz_id))
+        quiz_title = quiz.title if quiz else f"Quiz #{attempt.quiz_id}"
+        score_str = (
+            f"{attempt.score:.1f}%" if attempt.score is not None else "en attente de correction"
+        )
+
+        db.add(
+            Notification(
+                id=uuid.uuid4(),
+                user_id=attempt.student_id,
+                type="quiz_result",
+                title=f"Résultats : {quiz_title}",
+                body=(
+                    f"Votre tentative a été corrigée. "
+                    f"Score : {score_str} "
+                    f"({correct_count}/{len(auto_correctable)} réponses correctes)."
+                ),
+                data={
+                    "attempt_id": attempt_id,
+                    "quiz_id": attempt.quiz_id,
+                    "score": attempt.score,
+                    "correct": correct_count,
+                    "total": len(auto_correctable),
+                },
+            )
+        )
+
+        db.commit()
+
+        logger.info(
+            "[Correct] Attempt %d corrected: score=%.1f%% (%d/%d) answered=%d/%d",
+            attempt_id,
+            attempt.score if attempt.score is not None else 0.0,
+            correct_count,
+            len(auto_correctable),
+            answered_auto,
+            len(auto_correctable),
+        )
+        return {
+            "attempt_id": attempt_id,
+            "score": attempt.score,
+            "correct": correct_count,
+            "total_auto_correctable": len(auto_correctable),
+        }
+
+    except Exception as exc:
+        logger.error(
+            "[Correct] correct_quiz_attempt_task FAILED: attempt=%d error=%s",
+            attempt_id, exc, exc_info=True,
+        )
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise self.retry(exc=exc)
+
+    finally:
+        db.close()
+        engine.dispose()

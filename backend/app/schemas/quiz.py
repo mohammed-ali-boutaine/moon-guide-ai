@@ -117,7 +117,7 @@ class QuizResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ── Quiz attempt responses ─────────────────────────────────────────────────────
+# ── Quiz attempt schemas ───────────────────────────────────────────────────────
 
 class QuizAttemptStartResponse(BaseModel):
     attempt_id: int
@@ -126,5 +126,26 @@ class QuizAttemptStartResponse(BaseModel):
     started_at: datetime
     # None when the quiz has no time limit
     expires_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StudentAnswerSubmit(BaseModel):
+    question_id: int
+    # Free text for ShortAnswer; answer text for MCQ/TrueFalse
+    answer_text: Optional[str] = None
+
+
+class QuizSubmitRequest(BaseModel):
+    answers: list[StudentAnswerSubmit] = []
+
+
+class QuizAttemptSubmitResponse(BaseModel):
+    attempt_id: int
+    quiz_id: int
+    status: AttemptStatus
+    submitted_at: datetime
+    total_questions: int
+    answers_recorded: int
 
     model_config = ConfigDict(from_attributes=True)
