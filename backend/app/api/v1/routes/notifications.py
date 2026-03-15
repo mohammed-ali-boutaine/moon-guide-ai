@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session as DBSession
 
@@ -62,13 +62,13 @@ def list_notifications(
 
 @router.patch(
     "/read-all",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Mark all notifications as read",
 )
 def mark_all_read(
     current_user: CurrentUser,
     db: Annotated[DBSession, Depends(get_db)],
-) -> None:
+):
     db.execute(
         update(Notification)
         .where(
@@ -79,6 +79,7 @@ def mark_all_read(
     )
     db.commit()
     logger.info("All notifications marked read for user=%s", current_user.email)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── PATCH /notifications/{id}/read ───────────────────────────────────────────

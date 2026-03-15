@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DBSession, selectinload
 
@@ -537,7 +537,7 @@ def assign_quiz(
 
 @router.delete(
     "/{quiz_id}/unassign",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Remove a quiz assignment from a class",
 )
 def unassign_quiz(
@@ -545,7 +545,7 @@ def unassign_quiz(
     body: UnassignQuizRequest,
     current_user: TeacherUser,
     db: Annotated[DBSession, Depends(get_db)],
-) -> None:
+):
     """
     Deactivate the assignment of a quiz from a class (soft-delete: sets status=inactive).
 
@@ -580,3 +580,4 @@ def unassign_quiz(
         "Quiz unassigned: quiz=%d class=%s by=%s",
         quiz_id, body.class_id, current_user.email,
     )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

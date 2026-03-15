@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
@@ -47,14 +48,14 @@ class DocumentResponse(BaseModel):
     
     id: int
     scope: ScopeEnum
-    class_id: Optional[str] = None
+    class_id: Optional[uuid.UUID] = None
     filename: str
     file_url: str
     file_type: FileTypeEnum
     status: StatusEnum
-    uploaded_by_id: str
+    uploaded_by_id: uuid.UUID
     uploaded_by_role: RoleEnum
-    approved_by_id: Optional[str] = None
+    approved_by_id: Optional[uuid.UUID] = None
     approved_at: Optional[datetime] = None
     created_at: datetime
     rejection_reason: Optional[str] = None
