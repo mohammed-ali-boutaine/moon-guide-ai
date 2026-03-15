@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.quiz_attempt import AttemptStatus
+
 
 # ── Request ───────────────────────────────────────────────────────────────────
 
@@ -111,5 +113,18 @@ class QuizResponse(BaseModel):
     questions: list[QuestionResponse]
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ── Quiz attempt responses ─────────────────────────────────────────────────────
+
+class QuizAttemptStartResponse(BaseModel):
+    attempt_id: int
+    quiz_id: int
+    status: AttemptStatus
+    started_at: datetime
+    # None when the quiz has no time limit
+    expires_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)

@@ -10,28 +10,33 @@ Quiz generation, CRUD, and assignment endpoints:
   GET   /quiz/{quiz_id}             – retrieve quiz with questions+answers
   POST  /quiz                       – create quiz manually
   PATCH /quiz/{quiz_id}             – update quiz metadata/status
+  POST  /quiz/{quiz_id}/start       – start a quiz attempt (student)
 """
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DBSession, selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser, TeacherUser
+from app.core.dependencies import CurrentUser, StudentUser, TeacherUser
 from app.core.logging import logger
 from app.models.answer import Answer
 from app.models.class_ import Class
+from app.models.class_student import ClassStudent
 from app.models.document import Document, StatusEnum
 from app.models.question import Question
 from app.models.quiz import Quiz, QuizStatus
 from app.models.quiz_assignment import AssignmentStatus, QuizAssignment
+from app.models.quiz_attempt import AttemptStatus, QuizAttempt
 from app.models.quiz_job import JobStatus, QuizJob
 from app.schemas.quiz import (
+    QuizAttemptStartResponse,
     QuizCreateRequest,
     QuizGenerateRequest,
     QuizJobDetailResponse,
@@ -581,3 +586,116 @@ def unassign_quiz(
         quiz_id, body.class_id, current_user.email,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── POST /quiz/{quiz_id}/start ─────────────────────────────────────────────────
+
+@router.post(
+    "/{quiz_id}/start",
+    response_model=QuizAttemptStartResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Start a quiz attempt (student)",
+)
+def start_quiz_attempt(
+    quiz_id: int,
+    current_user: StudentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> QuizAttemptStartResponse:
+    """
+    Create a new `QuizAttempt` for the authenticated student.
+
+    - The quiz must be `published`.
+    - The student must be enrolled in a class to which the quiz is actively assigned.
+    - If the student already has a `started` or `in_progress` attempt, returns **409**
+      with the existing `attempt_id` so the client can resume.
+    - If `max_attempts` is set and exhausted, returns **409**.
+    - Returns `attempt_id`, `started_at`, and optional `expires_at`
+      (= `started_at + duration_minutes` when a time limit is configured).
+    """
+    # ── 1. Fetch quiz ─────────────────────────────────────────────────────────
+    quiz = db.scalar(select(Quiz).where(Quiz.id == quiz_id))
+    if quiz is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
+    if quiz.status != QuizStatus.published:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This quiz is not published.",
+        )
+
+    # ── 2. Verify student is enrolled in an assigned class ────────────────────
+    assignment = db.scalar(
+        select(QuizAssignment)
+        .join(ClassStudent, ClassStudent.class_id == QuizAssignment.class_id)
+        .where(
+            QuizAssignment.quiz_id == quiz_id,
+            QuizAssignment.status == AssignmentStatus.active,
+            ClassStudent.student_id == current_user.id,
+        )
+    )
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This quiz is not assigned to any class you are enrolled in.",
+        )
+
+    # ── 3. Lock: reject if an active attempt already exists ───────────────────
+    active_attempt = db.scalar(
+        select(QuizAttempt).where(
+            QuizAttempt.quiz_id == quiz_id,
+            QuizAttempt.student_id == current_user.id,
+            QuizAttempt.status.in_([AttemptStatus.started, AttemptStatus.in_progress]),
+        )
+    )
+    if active_attempt is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "You already have an active attempt for this quiz.",
+                "attempt_id": active_attempt.id,
+            },
+        )
+
+    # ── 4. Check max_attempts ─────────────────────────────────────────────────
+    if quiz.max_attempts is not None:
+        attempt_count = db.scalar(
+            select(func.count()).select_from(QuizAttempt).where(
+                QuizAttempt.quiz_id == quiz_id,
+                QuizAttempt.student_id == current_user.id,
+            )
+        )
+        if attempt_count >= quiz.max_attempts:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Maximum number of attempts ({quiz.max_attempts}) reached.",
+            )
+
+    # ── 5. Create attempt ─────────────────────────────────────────────────────
+    now = datetime.now(timezone.utc)
+    attempt = QuizAttempt(
+        quiz_id=quiz_id,
+        student_id=current_user.id,
+        status=AttemptStatus.started,
+        started_at=now,
+    )
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+
+    expires_at = (
+        now + timedelta(minutes=quiz.duration_minutes)
+        if quiz.duration_minutes is not None
+        else None
+    )
+
+    logger.info(
+        "Quiz attempt started: quiz=%d attempt=%d student=%s",
+        quiz_id, attempt.id, current_user.email,
+    )
+
+    return QuizAttemptStartResponse(
+        attempt_id=attempt.id,
+        quiz_id=quiz_id,
+        status=attempt.status,
+        started_at=attempt.started_at,
+        expires_at=expires_at,
+    )
