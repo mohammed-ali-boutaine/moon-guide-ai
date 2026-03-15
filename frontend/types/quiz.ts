@@ -145,3 +145,26 @@ export interface QuizAttemptSubmitResponse {
   total_questions: number;
   answers_recorded: number;
 }
+
+// ── Quiz history ──────────────────────────────────────────────────────────────
+
+export interface QuizHistoryItem {
+  attempt_id: number;
+  quiz_id: number;
+  quiz_title: string;
+  quiz_difficulty: string | null;
+  class_id: string | null;
+  class_name: string | null;
+  score: number | null;
+  status: string;
+  started_at: string;
+  submitted_at: string | null;
+}
+
+export interface PaginatedQuizHistory {
+  items: QuizHistoryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}

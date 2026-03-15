@@ -1,4 +1,6 @@
+import math
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -185,3 +187,28 @@ class AddStudentsResponse(BaseModel):
     summary: dict[str, int]  # {"total": N, "successful": M, "failed": K}
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ── Quiz history ───────────────────────────────────────────────────────────────
+
+class QuizHistoryItem(BaseModel):
+    attempt_id: int
+    quiz_id: int
+    quiz_title: str
+    quiz_difficulty: Optional[str]
+    class_id: Optional[UUID]
+    class_name: Optional[str]
+    score: Optional[float]
+    status: str
+    started_at: datetime
+    submitted_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedQuizHistory(BaseModel):
+    items: list[QuizHistoryItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

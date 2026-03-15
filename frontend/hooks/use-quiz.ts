@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  PaginatedQuizHistory,
   QuizCreateRequest,
   QuizGenerateRequest,
   QuizJobDetailResponse,
@@ -121,5 +122,44 @@ export function useUpdateQuiz(quizId: number | null) {
       qc.invalidateQueries({ queryKey: ['quiz', quizId] });
       qc.invalidateQueries({ queryKey: ['teacher-quizzes'] });
     },
+  });
+}
+
+// ── Quiz history ──────────────────────────────────────────────────────────────
+
+async function fetchQuizHistory(
+  page: number,
+  pageSize: number,
+  classId: string | null,
+  sortOrder: 'asc' | 'desc',
+): Promise<PaginatedQuizHistory> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+    sort_order: sortOrder,
+  });
+  if (classId) params.set('class_id', classId);
+
+  const res = await fetch(
+    `${API_URL}/api/v1/students/me/quiz-history?${params}`,
+    FETCH_OPTS,
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch quiz history');
+  }
+  return res.json();
+}
+
+export function useQuizHistory(
+  page: number,
+  pageSize: number,
+  classId: string | null,
+  sortOrder: 'asc' | 'desc',
+) {
+  return useQuery({
+    queryKey: ['quiz-history', page, pageSize, classId, sortOrder],
+    queryFn: () => fetchQuizHistory(page, pageSize, classId, sortOrder),
+    staleTime: 30_000,
   });
 }
