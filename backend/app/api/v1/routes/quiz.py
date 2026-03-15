@@ -1,10 +1,15 @@
 """
 routes/quiz.py
 
-Quiz generation endpoints:
-  POST  /quiz/generate            – start async quiz generation job
-  GET   /quiz/jobs/{job_id}       – poll job status
-  GET   /quiz/{quiz_id}           – retrieve generated quiz with questions+answers
+Quiz generation, CRUD, and assignment endpoints:
+  POST  /quiz/generate              – start async quiz generation job
+  GET   /quiz/jobs/{job_id}         – poll job status
+  GET   /quiz/assigned/{class_id}   – quizzes assigned to a class
+  POST  /quiz/{quiz_id}/assign      – assign a quiz to a class (teacher)
+  DELETE /quiz/{quiz_id}/unassign   – remove assignment (teacher)
+  GET   /quiz/{quiz_id}             – retrieve quiz with questions+answers
+  POST  /quiz                       – create quiz manually
+  PATCH /quiz/{quiz_id}             – update quiz metadata/status
 """
 from __future__ import annotations
 
@@ -17,12 +22,14 @@ from sqlalchemy.orm import Session as DBSession, selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser
+from app.core.dependencies import CurrentUser, TeacherUser
 from app.core.logging import logger
 from app.models.answer import Answer
+from app.models.class_ import Class
 from app.models.document import Document, StatusEnum
 from app.models.question import Question
 from app.models.quiz import Quiz, QuizStatus
+from app.models.quiz_assignment import AssignmentStatus, QuizAssignment
 from app.models.quiz_job import JobStatus, QuizJob
 from app.schemas.quiz import (
     QuizCreateRequest,
@@ -32,6 +39,13 @@ from app.schemas.quiz import (
     QuizResponse,
     QuizUpdateRequest,
 )
+from app.schemas.quiz_assignment import (
+    AssignedQuizItem,
+    AssignQuizRequest,
+    QuizAssignmentResponse,
+    UnassignQuizRequest,
+)
+from app.services.notification_service import notify_quiz_assigned
 
 router = APIRouter(prefix="/quiz", tags=["Quiz Generation"])
 
@@ -344,3 +358,225 @@ def update_quiz(
 
     logger.info("Quiz updated: id=%d status=%s user=%s", quiz.id, quiz.status, current_user.email)
     return QuizResponse.model_validate(quiz)
+
+
+# ── GET /quiz/assigned/{class_id} ─────────────────────────────────────────────
+# NOTE: registered BEFORE /{quiz_id} so "assigned" is not mistaken for an int
+
+@router.get(
+    "/assigned/{class_id}",
+    response_model=list[AssignedQuizItem],
+    summary="List quizzes assigned to a class",
+)
+def list_assigned_quizzes(
+    class_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> list[AssignedQuizItem]:
+    """
+    Return all active quiz assignments for a class.
+
+    - Teachers see this for classes they own.
+    - Students see this for classes they are enrolled in.
+    """
+    # Verify the class exists
+    cls = db.scalar(select(Class).where(Class.id == class_id))
+    if cls is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found.")
+
+    # Access control
+    is_teacher = current_user.role and current_user.role.name.value == "teacher"
+    is_student = current_user.role and current_user.role.name.value == "student"
+
+    if is_teacher and str(cls.teacher_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this class.",
+        )
+    if is_student:
+        from app.models.class_student import ClassStudent
+        enrolled = db.scalar(
+            select(ClassStudent).where(
+                ClassStudent.class_id == class_id,
+                ClassStudent.student_id == current_user.id,
+            )
+        )
+        if enrolled is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not enrolled in this class.",
+            )
+
+    assignments = db.scalars(
+        select(QuizAssignment)
+        .where(
+            QuizAssignment.class_id == class_id,
+            QuizAssignment.status == AssignmentStatus.active,
+        )
+        .options(
+            selectinload(QuizAssignment.quiz).options(
+                selectinload(Quiz.questions).selectinload(Question.answers)
+            ),
+            selectinload(QuizAssignment.assigned_by),
+        )
+        .order_by(QuizAssignment.assigned_at.desc())
+    ).all()
+
+    return [
+        AssignedQuizItem(
+            assignment_id=a.id,
+            assignment_status=a.status,
+            assigned_at=a.assigned_at,
+            assigned_by=a.assigned_by,
+            due_date=a.due_date,
+            quiz=QuizResponse.model_validate(a.quiz),
+        )
+        for a in assignments
+    ]
+
+
+# ── POST /quiz/{quiz_id}/assign ───────────────────────────────────────────────
+
+@router.post(
+    "/{quiz_id}/assign",
+    response_model=QuizAssignmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Assign a quiz to a class",
+)
+def assign_quiz(
+    quiz_id: int,
+    body: AssignQuizRequest,
+    current_user: TeacherUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> QuizAssignmentResponse:
+    """
+    Assign a published quiz to a class.
+
+    - Only the teacher who owns the class can assign.
+    - The quiz must exist (any status is accepted — teachers may assign drafts for testing,
+      but only published quizzes are visible to students via GET /quiz/assigned/{class_id}).
+    - Creates Notification rows for every student enrolled in the class.
+    """
+    # Fetch quiz
+    quiz = db.scalar(select(Quiz).where(Quiz.id == quiz_id))
+    if quiz is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
+
+    # Fetch class and verify ownership
+    cls = db.scalar(select(Class).where(Class.id == body.class_id))
+    if cls is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found.")
+    if str(cls.teacher_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this class.",
+        )
+
+    # Check for duplicate assignment
+    existing = db.scalar(
+        select(QuizAssignment).where(
+            QuizAssignment.quiz_id == quiz_id,
+            QuizAssignment.class_id == body.class_id,
+        )
+    )
+    if existing:
+        if existing.status == AssignmentStatus.active:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This quiz is already assigned to this class.",
+            )
+        # Re-activate a previously deactivated assignment
+        existing.status = AssignmentStatus.active
+        existing.due_date = body.due_date
+        existing.assigned_by_id = current_user.id
+        db.commit()
+        db.refresh(existing)
+        logger.info(
+            "Quiz assignment re-activated: quiz=%d class=%s by=%s",
+            quiz_id, body.class_id, current_user.email,
+        )
+        return QuizAssignmentResponse.model_validate(existing)
+
+    # Create assignment
+    assignment = QuizAssignment(
+        quiz_id=quiz_id,
+        class_id=body.class_id,
+        assigned_by_id=current_user.id,
+        status=AssignmentStatus.active,
+        due_date=body.due_date,
+    )
+    db.add(assignment)
+    db.flush()  # get assignment.id for the response
+
+    # Notify students
+    teacher_name = current_user.email
+    if hasattr(current_user, "profile") and current_user.profile:
+        p = current_user.profile
+        teacher_name = f"{p.first_name} {p.last_name}".strip() or teacher_name
+
+    due_str = body.due_date.isoformat() if body.due_date else None
+    notify_quiz_assigned(
+        db,
+        quiz=quiz,
+        class_id=body.class_id,
+        teacher_name=teacher_name,
+        due_date=due_str,
+    )
+
+    db.commit()
+    db.refresh(assignment)
+
+    logger.info(
+        "Quiz assigned: quiz=%d class=%s by=%s notifications_sent",
+        quiz_id, body.class_id, current_user.email,
+    )
+    return QuizAssignmentResponse.model_validate(assignment)
+
+
+# ── DELETE /quiz/{quiz_id}/unassign ───────────────────────────────────────────
+
+@router.delete(
+    "/{quiz_id}/unassign",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a quiz assignment from a class",
+)
+def unassign_quiz(
+    quiz_id: int,
+    body: UnassignQuizRequest,
+    current_user: TeacherUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> None:
+    """
+    Deactivate the assignment of a quiz from a class (soft-delete: sets status=inactive).
+
+    Only the teacher who owns the class can unassign.
+    """
+    cls = db.scalar(select(Class).where(Class.id == body.class_id))
+    if cls is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found.")
+    if str(cls.teacher_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this class.",
+        )
+
+    assignment = db.scalar(
+        select(QuizAssignment).where(
+            QuizAssignment.quiz_id == quiz_id,
+            QuizAssignment.class_id == body.class_id,
+            QuizAssignment.status == AssignmentStatus.active,
+        )
+    )
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Active assignment not found for this quiz/class pair.",
+        )
+
+    assignment.status = AssignmentStatus.inactive
+    db.commit()
+
+    logger.info(
+        "Quiz unassigned: quiz=%d class=%s by=%s",
+        quiz_id, body.class_id, current_user.email,
+    )

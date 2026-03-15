@@ -12,6 +12,7 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.chat_session import ChatSession
     from app.models.class_ import Class
+    from app.models.notification import Notification
     from app.models.role import Role
     from app.models.session import Session
     from app.models.user_activity import UserActivity
@@ -65,5 +66,8 @@ class User(Base):
         overlaps="class_students,class_",
     )
     chat_sessions: Mapped[list["ChatSession"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    notifications: Mapped[list["Notification"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

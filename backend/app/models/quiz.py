@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.class_ import Class
     from app.models.document import Document
     from app.models.question import Question
+    from app.models.quiz_assignment import QuizAssignment
 
 
 class QuizStatus(str, enum.Enum):
@@ -62,4 +63,8 @@ class Quiz(Base):
         back_populates="quiz",
         cascade="all, delete-orphan",
         order_by="Question.order",
+    )
+    assignments: Mapped[list["QuizAssignment"]] = relationship(
+        back_populates="quiz",
+        cascade="all, delete-orphan",
     )

@@ -8,7 +8,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.routes import activity, admin, auth, chat, classes, documents, personal, quiz, search, students, users
+from app.api.v1.routes import activity, admin, auth, chat, classes, documents, notifications, personal, quiz, search, students, users
 
 api_router = APIRouter(prefix="/api")
 
@@ -23,3 +23,4 @@ api_router.include_router(search.router)
 api_router.include_router(personal.router)
 api_router.include_router(chat.router)
 api_router.include_router(quiz.router)
+api_router.include_router(notifications.router)
