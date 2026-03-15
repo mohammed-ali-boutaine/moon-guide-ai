@@ -19,15 +19,18 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser
 from app.core.logging import logger
+from app.models.answer import Answer
 from app.models.document import Document, StatusEnum
 from app.models.question import Question
-from app.models.quiz import Quiz
+from app.models.quiz import Quiz, QuizStatus
 from app.models.quiz_job import JobStatus, QuizJob
 from app.schemas.quiz import (
+    QuizCreateRequest,
     QuizGenerateRequest,
     QuizJobDetailResponse,
     QuizJobResponse,
     QuizResponse,
+    QuizUpdateRequest,
 )
 
 router = APIRouter(prefix="/quiz", tags=["Quiz Generation"])
@@ -224,4 +227,120 @@ def get_quiz(
                 detail="You do not have access to this quiz.",
             )
 
+    return QuizResponse.model_validate(quiz)
+
+
+# ── POST /quiz ────────────────────────────────────────────────────────────────
+
+@router.post(
+    "",
+    response_model=QuizResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a quiz manually with questions",
+)
+def create_quiz(
+    body: QuizCreateRequest,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> QuizResponse:
+    """
+    Create a quiz manually.  Only teachers can call this endpoint.
+    All questions and answers are created in a single transaction.
+    """
+    is_teacher = current_user.role and current_user.role.name.value == "teacher"
+    if not is_teacher:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only teachers can create quizzes.",
+        )
+
+    quiz = Quiz(
+        class_id=body.class_id,
+        title=body.title,
+        description=body.description,
+        difficulty=body.difficulty,
+        duration_minutes=body.duration_minutes,
+        max_attempts=body.max_attempts,
+        status=QuizStatus.draft,
+    )
+    db.add(quiz)
+    db.flush()  # obtain quiz.id before inserting children
+
+    for q_data in body.questions:
+        question = Question(
+            quiz_id=quiz.id,
+            type=q_data.type,
+            text=q_data.text,
+            order=q_data.order,
+        )
+        db.add(question)
+        db.flush()
+        for a_data in q_data.answers:
+            db.add(Answer(
+                question_id=question.id,
+                text=a_data.text,
+                is_correct=a_data.is_correct,
+                order=a_data.order,
+            ))
+
+    db.commit()
+
+    quiz = db.scalar(
+        select(Quiz)
+        .where(Quiz.id == quiz.id)
+        .options(selectinload(Quiz.questions).selectinload(Question.answers))
+    )
+    logger.info("Quiz created manually: id=%d user=%s", quiz.id, current_user.email)
+    return QuizResponse.model_validate(quiz)
+
+
+# ── PATCH /quiz/{quiz_id} ─────────────────────────────────────────────────────
+
+@router.patch(
+    "/{quiz_id}",
+    response_model=QuizResponse,
+    summary="Update quiz metadata or publish/archive it",
+)
+def update_quiz(
+    quiz_id: int,
+    body: QuizUpdateRequest,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> QuizResponse:
+    """
+    Update quiz metadata (title, description, status, difficulty, duration, max_attempts).
+    Only teachers can call this endpoint.
+    """
+    is_teacher = current_user.role and current_user.role.name.value == "teacher"
+    if not is_teacher:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only teachers can update quizzes.",
+        )
+
+    quiz = db.scalar(
+        select(Quiz)
+        .where(Quiz.id == quiz_id)
+        .options(selectinload(Quiz.questions).selectinload(Question.answers))
+    )
+    if quiz is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
+
+    if body.title is not None:
+        quiz.title = body.title
+    if body.description is not None:
+        quiz.description = body.description
+    if body.status is not None:
+        quiz.status = QuizStatus(body.status)
+    if body.difficulty is not None:
+        quiz.difficulty = body.difficulty
+    if body.duration_minutes is not None:
+        quiz.duration_minutes = body.duration_minutes
+    if body.max_attempts is not None:
+        quiz.max_attempts = body.max_attempts
+
+    db.commit()
+    db.refresh(quiz)
+
+    logger.info("Quiz updated: id=%d status=%s user=%s", quiz.id, quiz.status, current_user.email)
     return QuizResponse.model_validate(quiz)

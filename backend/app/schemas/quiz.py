@@ -15,6 +15,38 @@ class QuizGenerateRequest(BaseModel):
     difficulty: str = Field(pattern="^(easy|medium|hard)$", description="easy | medium | hard")
 
 
+class AnswerCreate(BaseModel):
+    text: str = Field(min_length=1)
+    is_correct: bool
+    order: int
+
+
+class QuestionCreate(BaseModel):
+    type: str = Field(pattern="^(MCQ|TrueFalse|ShortAnswer)$")
+    text: str = Field(min_length=1)
+    order: int
+    answers: list[AnswerCreate] = []
+
+
+class QuizCreateRequest(BaseModel):
+    class_id: Optional[uuid.UUID] = None
+    title: str = Field(min_length=1, max_length=255)
+    description: Optional[str] = None
+    difficulty: Optional[str] = Field(None, pattern="^(easy|medium|hard)$")
+    duration_minutes: Optional[int] = Field(None, ge=1)
+    max_attempts: Optional[int] = Field(None, ge=1)
+    questions: list[QuestionCreate] = []
+
+
+class QuizUpdateRequest(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    status: Optional[str] = Field(None, pattern="^(draft|published|archived)$")
+    difficulty: Optional[str] = Field(None, pattern="^(easy|medium|hard)$")
+    duration_minutes: Optional[int] = Field(None, ge=1)
+    max_attempts: Optional[int] = Field(None, ge=1)
+
+
 # ── Job responses ─────────────────────────────────────────────────────────────
 
 class QuizJobResponse(BaseModel):
@@ -74,6 +106,8 @@ class QuizResponse(BaseModel):
     document_id: Optional[int]
     class_id: Optional[uuid.UUID]
     status: str
+    duration_minutes: Optional[int]
+    max_attempts: Optional[int]
     questions: list[QuestionResponse]
     created_at: datetime
     updated_at: datetime
