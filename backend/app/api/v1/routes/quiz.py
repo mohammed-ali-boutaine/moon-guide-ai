@@ -53,6 +53,13 @@ from app.schemas.quiz_assignment import (
     QuizAssignmentResponse,
     UnassignQuizRequest,
 )
+from app.schemas.grading import (
+    AttemptResultResponse,
+    QuestionFeedbackResponse,
+    QuestionResult,
+    ShortAnswerGradeResponse,
+    TeacherReviewRequest,
+)
 from app.services.notification_service import notify_quiz_assigned
 
 router = APIRouter(prefix="/quiz", tags=["Quiz Generation"])
@@ -823,3 +830,434 @@ def submit_quiz_attempt(
         total_questions=total_questions,
         answers_recorded=answers_recorded,
     )
+
+
+# ── POST /quiz/{attempt_id}/generate-feedback ──────────────────────────────────
+
+@router.post(
+    "/{attempt_id}/generate-feedback",
+    response_model=dict,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Generate LLM feedback for all questions in an attempt",
+)
+def generate_feedback(
+    attempt_id: int,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> dict:
+    """
+    Enqueue a background task to generate personalized per-question feedback.
+
+    - The attempt must belong to the authenticated student, OR the caller
+      must be the teacher of the quiz's class.
+    - Feedback is stored in `question_feedbacks` and accessible via the
+      results endpoint.
+    - Returns immediately with 202; poll `GET /quiz/{attempt_id}/results`
+      and check `feedback_generated`.
+    """
+    attempt = db.scalar(select(QuizAttempt).where(QuizAttempt.id == attempt_id))
+    if attempt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attempt not found.")
+
+    # Allow: attempt's own student, or teacher of the class
+    is_own = str(attempt.student_id) == str(current_user.id)
+    is_teacher = current_user.role and current_user.role.name.value == "teacher"
+    if not (is_own or is_teacher):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    if attempt.status != AttemptStatus.submitted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Feedback can only be generated for submitted attempts.",
+        )
+
+    from app.services.grading_service import generate_feedback_task
+
+    generate_feedback_task.delay(
+        attempt_id=attempt_id,
+        db_url=settings.DATABASE_URL,
+    )
+
+    logger.info(
+        "generate_feedback dispatched: attempt=%d by=%s",
+        attempt_id, current_user.email,
+    )
+    return {"message": "Feedback generation queued.", "attempt_id": attempt_id}
+
+
+# ── PATCH /quiz/{attempt_id}/short-answers/{answer_id}/review ─────────────────
+
+@router.patch(
+    "/{attempt_id}/short-answers/{answer_id}/review",
+    response_model=ShortAnswerGradeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Teacher review: override LLM score for a short answer",
+)
+def review_short_answer(
+    attempt_id: int,
+    answer_id: int,
+    body: TeacherReviewRequest,
+    current_user: TeacherUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> ShortAnswerGradeResponse:
+    """
+    Teacher override for a short-answer LLM grade.
+
+    - Sets `teacher_score` on the `ShortAnswerGrade` row.
+    - Updates `StudentAnswer.llm_score` and clears `needs_review`.
+    - Recalculates `QuizAttempt.score` if all short answers are now reviewed.
+    """
+    from app.models.short_answer_grade import ShortAnswerGrade
+    from app.models.question import Question, QuestionType
+
+    grade = db.scalar(
+        select(ShortAnswerGrade).where(
+            ShortAnswerGrade.student_answer_id == answer_id,
+            ShortAnswerGrade.attempt_id == attempt_id,
+        )
+    )
+    if grade is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Grade record not found for this answer.",
+        )
+
+    # Apply teacher override
+    grade.teacher_score = body.teacher_score
+    grade.teacher_note = body.teacher_note
+    grade.reviewed_at = datetime.now(timezone.utc)
+    grade.reviewed_by_id = current_user.id
+    grade.needs_review = False
+
+    # Update the StudentAnswer with the teacher's score
+    student_answer = db.scalar(
+        select(StudentAnswer).where(StudentAnswer.id == answer_id)
+    )
+    if student_answer:
+        student_answer.llm_score = body.teacher_score
+        student_answer.needs_review = False
+        student_answer.is_correct = body.teacher_score >= 50.0
+
+    db.flush()
+
+    # Recalculate attempt score if no more pending reviews
+    attempt = db.scalar(select(QuizAttempt).where(QuizAttempt.id == attempt_id))
+    if attempt:
+        questions = db.scalars(
+            select(Question).where(Question.quiz_id == attempt.quiz_id)
+        ).all()
+        all_student_answers = db.scalars(
+            select(StudentAnswer).where(StudentAnswer.attempt_id == attempt_id)
+        ).all()
+
+        q_map = {q.id: q for q in questions}
+        total_possible = sum(q.points for q in questions) or len(questions)
+        earned = 0.0
+        all_reviewed = True
+
+        for sa in all_student_answers:
+            q = q_map.get(sa.question_id)
+            if q is None:
+                continue
+            if q.type in (QuestionType.mcq, QuestionType.true_false):
+                if sa.is_correct:
+                    earned += q.points
+            elif q.type == QuestionType.short_answer:
+                if sa.needs_review:
+                    all_reviewed = False
+                elif sa.llm_score is not None:
+                    earned += q.points * sa.llm_score / 100.0
+
+        if all_reviewed:
+            attempt.score = round(earned / total_possible * 100, 2)
+            logger.info(
+                "Review updated attempt %d score → %.2f%%", attempt_id, attempt.score
+            )
+
+    db.commit()
+
+    return ShortAnswerGradeResponse.model_validate(grade)
+
+
+# ── GET /quiz/{attempt_id}/results ─────────────────────────────────────────────
+
+@router.get(
+    "/{attempt_id}/results",
+    response_model=AttemptResultResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get detailed results for a quiz attempt",
+)
+def get_attempt_results(
+    attempt_id: int,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> AttemptResultResponse:
+    """
+    Full results for a submitted quiz attempt.
+
+    Returns:
+    - Score, duration, class average
+    - Per-question: student answer, correct answer, is_correct, feedback
+    - LLM grading details for ShortAnswer questions
+    - Cost summary (total tokens used across all LLM calls for this attempt)
+
+    Access: attempt's own student, or the teacher of the class.
+    """
+    from app.models.answer import Answer
+    from app.models.question import Question, QuestionType
+    from app.models.question_feedback import QuestionFeedback
+    from app.models.short_answer_grade import ShortAnswerGrade
+
+    attempt = db.scalar(select(QuizAttempt).where(QuizAttempt.id == attempt_id))
+    if attempt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attempt not found.")
+
+    is_own = str(attempt.student_id) == str(current_user.id)
+    is_teacher = current_user.role and current_user.role.name.value == "teacher"
+    if not (is_own or is_teacher):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    quiz = db.scalar(select(Quiz).where(Quiz.id == attempt.quiz_id))
+    if quiz is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
+
+    questions = db.scalars(
+        select(Question).where(Question.quiz_id == attempt.quiz_id)
+    ).all()
+
+    # Build lookup maps
+    student_answers: dict[int, StudentAnswer] = {
+        sa.question_id: sa
+        for sa in db.scalars(
+            select(StudentAnswer).where(StudentAnswer.attempt_id == attempt_id)
+        ).all()
+    }
+
+    feedbacks: dict[int, QuestionFeedback] = {
+        fb.question_id: fb
+        for fb in db.scalars(
+            select(QuestionFeedback).where(QuestionFeedback.attempt_id == attempt_id)
+        ).all()
+    }
+
+    sa_grades: dict[int, ShortAnswerGrade] = {
+        sag.question_id: sag
+        for sag in db.scalars(
+            select(ShortAnswerGrade).where(ShortAnswerGrade.attempt_id == attempt_id)
+        ).all()
+    }
+
+    # Correct answer text lookup
+    correct_answers: dict[int, str] = {}
+    for q in questions:
+        ans = db.scalar(
+            select(Answer).where(
+                Answer.question_id == q.id,
+                Answer.is_correct.is_(True),
+            )
+        )
+        if ans:
+            correct_answers[q.id] = ans.text.strip()
+
+    # Class average
+    class_avg_result = db.execute(
+        select(func.avg(QuizAttempt.score)).where(
+            QuizAttempt.quiz_id == attempt.quiz_id,
+            QuizAttempt.status == AttemptStatus.submitted,
+            QuizAttempt.score.isnot(None),
+        )
+    ).scalar()
+    class_average = round(float(class_avg_result), 2) if class_avg_result is not None else None
+
+    # Duration
+    duration_seconds: int | None = None
+    if attempt.submitted_at and attempt.started_at:
+        duration_seconds = int(
+            (attempt.submitted_at - attempt.started_at).total_seconds()
+        )
+
+    # Build per-question results
+    auto_graded = 0
+    pending_review = 0
+    total_tokens = 0
+    question_results: list[QuestionResult] = []
+
+    for q in questions:
+        sa = student_answers.get(q.id)
+        fb = feedbacks.get(q.id)
+        sag = sa_grades.get(q.id)
+
+        # Score for this question (0-100)
+        q_score: float | None = None
+        if sa:
+            if q.type in (QuestionType.mcq, QuestionType.true_false):
+                q_score = 100.0 if sa.is_correct else (0.0 if sa.is_correct is False else None)
+            elif q.type == QuestionType.short_answer:
+                # Use teacher score if available, else LLM score
+                effective_score = (sag.teacher_score if sag and sag.teacher_score is not None else None) or sa.llm_score
+                q_score = effective_score
+
+        if sa and (sa.is_correct is not None or sa.llm_score is not None):
+            auto_graded += 1
+        if sa and sa.needs_review:
+            pending_review += 1
+
+        if sag:
+            total_tokens += sag.total_tokens
+        if fb:
+            total_tokens += fb.total_tokens
+
+        question_results.append(
+            QuestionResult(
+                question_id=q.id,
+                question_text=q.text,
+                question_type=q.type.value,
+                points=q.points,
+                student_answer=sa.answer_text if sa else None,
+                correct_answer=correct_answers.get(q.id),
+                is_correct=sa.is_correct if sa else None,
+                score=q_score,
+                needs_review=sa.needs_review if sa else False,
+                feedback_text=fb.feedback_text if fb else None,
+                key_points=fb.key_points if fb else [],
+                improvement_suggestion=fb.improvement_suggestion if fb else None,
+                llm_reasoning=sag.llm_reasoning if sag else None,
+                bleu_score=sag.bleu_score if sag else None,
+                rouge_l_score=sag.rouge_l_score if sag else None,
+                teacher_score=sag.teacher_score if sag else None,
+            )
+        )
+
+    feedback_generated = len(feedbacks) > 0
+
+    return AttemptResultResponse(
+        attempt_id=attempt_id,
+        quiz_id=attempt.quiz_id,
+        quiz_title=quiz.title,
+        quiz_difficulty=quiz.difficulty,
+        status=attempt.status.value,
+        started_at=attempt.started_at,
+        submitted_at=attempt.submitted_at,
+        duration_seconds=duration_seconds,
+        score=attempt.score,
+        class_average=class_average,
+        total_questions=len(questions),
+        auto_graded=auto_graded,
+        pending_review=pending_review,
+        feedback_generated=feedback_generated,
+        questions=question_results,
+        total_tokens_used=total_tokens,
+    )
+
+
+# ── GET /quiz/{attempt_id}/results/pdf ────────────────────────────────────────
+
+@router.get(
+    "/{attempt_id}/results/pdf",
+    status_code=status.HTTP_200_OK,
+    summary="Export attempt results as PDF",
+)
+def export_results_pdf(
+    attempt_id: int,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> Response:
+    """
+    Generate a PDF report for a quiz attempt and stream it as a download.
+
+    Uses weasyprint (HTML→PDF). If weasyprint is not installed, returns
+    a plain-text fallback with instructions.
+
+    Access: same as GET /quiz/{attempt_id}/results.
+    """
+    # Re-use the results logic
+    results = get_attempt_results(attempt_id, current_user, db)
+
+    # Build HTML
+    score_str = f"{results.score:.1f}%" if results.score is not None else "En attente"
+    avg_str = f"{results.class_average:.1f}%" if results.class_average is not None else "N/A"
+    duration_str = (
+        f"{results.duration_seconds // 60}m {results.duration_seconds % 60}s"
+        if results.duration_seconds else "N/A"
+    )
+
+    q_rows = ""
+    for i, q in enumerate(results.questions, start=1):
+        status_badge = (
+            '<span style="color:green">✓ Correct</span>' if q.is_correct is True
+            else '<span style="color:red">✗ Incorrect</span>' if q.is_correct is False
+            else '<span style="color:orange">En attente</span>'
+        )
+        score_cell = f"{q.score:.0f}/100" if q.score is not None else "—"
+        feedback_cell = q.feedback_text or "—"
+        q_rows += f"""
+        <tr>
+          <td>{i}. {q.question_text}</td>
+          <td>{q.student_answer or '(sans réponse)'}</td>
+          <td>{q.correct_answer or '—'}</td>
+          <td>{status_badge}</td>
+          <td>{score_cell}</td>
+          <td>{feedback_cell}</td>
+        </tr>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {{ font-family: Arial, sans-serif; font-size: 12px; margin: 30px; }}
+    h1 {{ font-size: 20px; }}
+    .meta {{ color: #555; margin-bottom: 20px; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+    th {{ background: #2563eb; color: white; padding: 8px; text-align: left; }}
+    td {{ padding: 6px 8px; border-bottom: 1px solid #ddd; vertical-align: top; }}
+    tr:nth-child(even) {{ background: #f9fafb; }}
+    .summary {{ display: flex; gap: 40px; margin: 20px 0; }}
+    .stat {{ text-align: center; }}
+    .stat-value {{ font-size: 24px; font-weight: bold; color: #2563eb; }}
+    @media print {{ button {{ display: none; }} }}
+  </style>
+</head>
+<body>
+  <h1>Résultats : {results.quiz_title}</h1>
+  <div class="meta">
+    Difficulté : {results.quiz_difficulty or 'N/A'} &nbsp;|&nbsp;
+    Soumis le : {results.submitted_at.strftime('%d/%m/%Y %H:%M') if results.submitted_at else 'N/A'} &nbsp;|&nbsp;
+    Durée : {duration_str}
+  </div>
+  <div class="summary">
+    <div class="stat"><div class="stat-value">{score_str}</div><div>Votre score</div></div>
+    <div class="stat"><div class="stat-value">{avg_str}</div><div>Moyenne classe</div></div>
+    <div class="stat"><div class="stat-value">{results.auto_graded}/{results.total_questions}</div><div>Questions corrigées</div></div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Question</th><th>Votre réponse</th><th>Réponse attendue</th>
+        <th>Résultat</th><th>Score</th><th>Feedback</th>
+      </tr>
+    </thead>
+    <tbody>{q_rows}</tbody>
+  </table>
+</body>
+</html>"""
+
+    try:
+        import weasyprint
+        pdf_bytes = weasyprint.HTML(string=html).write_pdf()
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="results_attempt_{attempt_id}.pdf"'
+            },
+        )
+    except ImportError:
+        logger.warning("weasyprint not installed — returning HTML fallback for PDF export")
+        return Response(
+            content=html,
+            media_type="text/html",
+            headers={
+                "Content-Disposition": f'inline; filename="results_attempt_{attempt_id}.html"'
+            },
+        )

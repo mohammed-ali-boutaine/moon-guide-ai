@@ -136,12 +136,22 @@ function HistoryTable({ items }: { items: QuizHistoryItem[] }) {
 
               {/* Action */}
               <td className="py-3.5 px-4 text-right">
-                <Link
-                  href={`/dashboard/student/quizzes/${item.quiz_id}`}
-                  className="text-xs font-medium text-primary-400 hover:text-primary-300 transition-colors"
-                >
-                  Détails →
-                </Link>
+                <div className="flex items-center justify-end gap-3">
+                  {item.status === 'submitted' && (
+                    <Link
+                      href={`/dashboard/student/quiz-results/${item.attempt_id}`}
+                      className="text-xs font-medium text-green-400 hover:text-green-300 transition-colors"
+                    >
+                      Résultats →
+                    </Link>
+                  )}
+                  <Link
+                    href={`/dashboard/student/quizzes/${item.quiz_id}`}
+                    className="text-xs font-medium text-primary-400 hover:text-primary-300 transition-colors"
+                  >
+                    Quiz →
+                  </Link>
+                </div>
               </td>
             </tr>
           ))}

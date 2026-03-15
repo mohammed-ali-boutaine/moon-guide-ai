@@ -1,4 +1,6 @@
 from app.models.answer import Answer
+from app.models.question_feedback import QuestionFeedback
+from app.models.short_answer_grade import ShortAnswerGrade
 from app.models.chat_message import ChatMessage, ChatRole
 from app.models.chat_session import ChatSession
 from app.models.class_ import Class
@@ -35,6 +37,8 @@ __all__ = [
     "JobStatus",
     "Notification",
     "Question",
+    "QuestionFeedback",
+    "ShortAnswerGrade",
     "QuestionType",
     "Quiz",
     "QuizAssignment",

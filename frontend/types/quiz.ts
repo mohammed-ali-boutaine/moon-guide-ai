@@ -146,6 +146,46 @@ export interface QuizAttemptSubmitResponse {
   answers_recorded: number;
 }
 
+// ── Results & grading ─────────────────────────────────────────────────────────
+
+export interface QuestionResult {
+  question_id: number;
+  question_text: string;
+  question_type: QuestionType;
+  points: number;
+  student_answer: string | null;
+  correct_answer: string | null;
+  is_correct: boolean | null;
+  score: number | null;
+  needs_review: boolean;
+  feedback_text: string | null;
+  key_points: string[];
+  improvement_suggestion: string | null;
+  llm_reasoning: string | null;
+  bleu_score: number | null;
+  rouge_l_score: number | null;
+  teacher_score: number | null;
+}
+
+export interface AttemptResultResponse {
+  attempt_id: number;
+  quiz_id: number;
+  quiz_title: string;
+  quiz_difficulty: string | null;
+  status: string;
+  started_at: string;
+  submitted_at: string | null;
+  duration_seconds: number | null;
+  score: number | null;
+  class_average: number | null;
+  total_questions: number;
+  auto_graded: number;
+  pending_review: number;
+  feedback_generated: boolean;
+  questions: QuestionResult[];
+  total_tokens_used: number;
+}
+
 // ── Quiz history ──────────────────────────────────────────────────────────────
 
 export interface QuizHistoryItem {

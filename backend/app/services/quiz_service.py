@@ -749,11 +749,26 @@ def correct_quiz_attempt_task(self, attempt_id: int, db_url: str) -> dict:
 
         db.commit()
 
+        # ── 6. Dispatch ShortAnswer grading if needed ─────────────────────────
+        has_short_answer = any(
+            q.type == QuestionType.short_answer for q in questions
+        )
+        if has_short_answer:
+            from app.services.grading_service import grade_short_answers_task
+            grade_short_answers_task.delay(
+                attempt_id=attempt_id,
+                db_url=str(db_url),
+            )
+            logger.info(
+                "[Correct] Dispatched grade_short_answers_task for attempt=%d", attempt_id
+            )
+
         return {
             "attempt_id": attempt_id,
             "score": attempt.score,
             "correct": correct_count,
             "total_auto_correctable": len(auto_correctable),
+            "short_answer_grading_queued": has_short_answer,
         }
 
     except Exception as exc:

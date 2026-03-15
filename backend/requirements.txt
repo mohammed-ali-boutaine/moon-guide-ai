@@ -50,3 +50,10 @@ google-genai>=1.0.0
 spacy>=3.7.0
 pytextrank>=3.2.0
 scikit-learn>=1.4.0
+
+# Short-answer similarity scoring
+nltk>=3.8.0
+rouge-score>=0.1.2
+
+# PDF export (optional — falls back to HTML if not installed)
+weasyprint>=60.0

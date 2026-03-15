@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -35,6 +35,12 @@ class StudentAnswer(Base):
     answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Nullable before correction (e.g. ShortAnswer graded manually)
     is_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # LLM-assigned score 0-100 for ShortAnswer questions (None for MCQ/TrueFalse)
+    llm_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # True when the LLM is low-confidence and a teacher should review
+    needs_review: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
 
     # Relationships
     attempt: Mapped["QuizAttempt"] = relationship(back_populates="answers")
