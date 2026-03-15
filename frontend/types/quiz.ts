@@ -115,3 +115,33 @@ export interface QuizUpdateRequest {
   duration_minutes?: number;
   max_attempts?: number;
 }
+
+// ── Attempt shapes ────────────────────────────────────────────────────────────
+
+export type AttemptStatus = 'started' | 'in_progress' | 'submitted';
+
+export interface QuizAttemptStartResponse {
+  attempt_id: number;
+  quiz_id: number;
+  status: AttemptStatus;
+  started_at: string;
+  expires_at: string | null;
+}
+
+export interface StudentAnswerSubmit {
+  question_id: number;
+  answer_text: string | null;
+}
+
+export interface QuizSubmitRequest {
+  answers: StudentAnswerSubmit[];
+}
+
+export interface QuizAttemptSubmitResponse {
+  attempt_id: number;
+  quiz_id: number;
+  status: AttemptStatus;
+  submitted_at: string;
+  total_questions: number;
+  answers_recorded: number;
+}
