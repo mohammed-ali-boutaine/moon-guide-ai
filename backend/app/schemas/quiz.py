@@ -27,6 +27,7 @@ class QuestionCreate(BaseModel):
     type: str = Field(pattern="^(MCQ|TrueFalse|ShortAnswer)$")
     text: str = Field(min_length=1)
     order: int
+    points: int = Field(default=1, ge=1, description="Point value for this question")
     answers: list[AnswerCreate] = []
 
 
@@ -95,6 +96,7 @@ class QuestionResponse(BaseModel):
     type: str
     text: str
     order: int
+    points: int
     answers: list[AnswerResponse]
 
     model_config = ConfigDict(from_attributes=True)

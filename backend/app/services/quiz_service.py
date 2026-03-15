@@ -295,6 +295,48 @@ def _recheck_answers(
         return questions
 
 
+# ── Pure correction logic (unit-testable, no DB dependency) ──────────────────
+
+def _compute_correction(
+    student_answers: list,
+    correct_text: dict[int, str],
+    question_points: dict[int, int],
+) -> tuple[list, float | None]:
+    """
+    Grade a list of student answers.
+
+    Args:
+        student_answers: ORM StudentAnswer objects (or any object with
+                         .question_id, .answer_text, .is_correct attributes).
+        correct_text:    {question_id: correct_answer_text_lowered} — only
+                         contains auto-correctable (MCQ/TrueFalse) questions.
+        question_points: {question_id: points} for auto-correctable questions.
+
+    Returns:
+        (student_answers, score_or_None)
+        - student_answers have .is_correct mutated in place.
+        - score is the weighted percentage (0–100) over auto-correctable
+          questions, or None when there are none (all ShortAnswer).
+    """
+    auto_correctable = set(correct_text.keys())
+    earned_points = 0
+    total_points = sum(question_points.get(qid, 1) for qid in auto_correctable)
+
+    for sa in student_answers:
+        if sa.question_id in auto_correctable:
+            submitted = (sa.answer_text or "").strip().lower()
+            sa.is_correct = submitted == correct_text[sa.question_id]
+            if sa.is_correct:
+                earned_points += question_points.get(sa.question_id, 1)
+        # ShortAnswer: is_correct stays None (manual grading)
+
+    if not auto_correctable:
+        return student_answers, None
+
+    score = round(earned_points / total_points * 100, 2)
+    return student_answers, score
+
+
 # ── DB persistence ────────────────────────────────────────────────────────────
 
 def _persist_quiz(
@@ -334,6 +376,7 @@ def _persist_quiz(
             type=q_type,
             text=q_data["text"].strip(),
             order=order,
+            points=int(q_data.get("points", 1)),
         )
         db.add(question)
         db.flush()  # get question.id
@@ -618,8 +661,9 @@ def correct_quiz_attempt_task(self, attempt_id: int, db_url: str) -> dict:
             select(Question).where(Question.quiz_id == attempt.quiz_id)
         ).all()
 
-        # Map question_id → correct Answer text (MCQ/TrueFalse only)
+        # Build lookup maps for auto-correctable questions
         correct_text: dict[int, str] = {}
+        question_points: dict[int, int] = {}
         for q in questions:
             if q.type in (QuestionType.mcq, QuestionType.true_false):
                 correct_ans = db.scalar(
@@ -630,34 +674,50 @@ def correct_quiz_attempt_task(self, attempt_id: int, db_url: str) -> dict:
                 )
                 if correct_ans:
                     correct_text[q.id] = correct_ans.text.strip().lower()
+                    question_points[q.id] = q.points
 
-        auto_correctable = set(correct_text.keys())
+        logger.info(
+            "[Correct] Attempt %d: %d auto-correctable questions (total points: %d)",
+            attempt_id,
+            len(correct_text),
+            sum(question_points.values()),
+        )
 
-        # ── 3. Load and correct student answers ───────────────────────────────
+        # ── 3. Load student answers ───────────────────────────────────────────
         student_answers = db.scalars(
             select(StudentAnswer).where(StudentAnswer.attempt_id == attempt_id)
         ).all()
 
-        correct_count = 0
-        for sa in student_answers:
-            if sa.question_id in auto_correctable:
-                submitted = (sa.answer_text or "").strip().lower()
-                sa.is_correct = submitted == correct_text[sa.question_id]
-                if sa.is_correct:
-                    correct_count += 1
-            # ShortAnswer: is_correct stays None (manual grading)
+        # ── 4. Grade + compute weighted score ─────────────────────────────────
+        student_answers, score = _compute_correction(
+            student_answers, correct_text, question_points
+        )
+        attempt.score = score
 
-        # ── 4. Compute score ──────────────────────────────────────────────────
-        # Count auto-correctable questions that the student answered
+        auto_correctable = set(correct_text.keys())
+        correct_count = sum(
+            1 for sa in student_answers
+            if sa.question_id in auto_correctable and sa.is_correct
+        )
         answered_auto = sum(
             1 for sa in student_answers if sa.question_id in auto_correctable
         )
-        if auto_correctable:
-            # Score over the total auto-correctable questions in the quiz
-            attempt.score = round(correct_count / len(auto_correctable) * 100, 2)
-        # else: all ShortAnswer — score stays None until manual grading
 
         db.flush()
+
+        logger.info(
+            "[Correct] Attempt %d graded: score=%s earned=%d/%d questions correct=%d/%d",
+            attempt_id,
+            f"{score:.2f}%" if score is not None else "None",
+            sum(
+                question_points.get(sa.question_id, 1)
+                for sa in student_answers
+                if sa.question_id in auto_correctable and sa.is_correct
+            ),
+            sum(question_points.values()),
+            correct_count,
+            answered_auto,
+        )
 
         # ── 5. In-app notification for the student ────────────────────────────
         quiz = db.scalar(select(Quiz).where(Quiz.id == attempt.quiz_id))
@@ -689,15 +749,6 @@ def correct_quiz_attempt_task(self, attempt_id: int, db_url: str) -> dict:
 
         db.commit()
 
-        logger.info(
-            "[Correct] Attempt %d corrected: score=%.1f%% (%d/%d) answered=%d/%d",
-            attempt_id,
-            attempt.score if attempt.score is not None else 0.0,
-            correct_count,
-            len(auto_correctable),
-            answered_auto,
-            len(auto_correctable),
-        )
         return {
             "attempt_id": attempt_id,
             "score": attempt.score,
