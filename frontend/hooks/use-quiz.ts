@@ -3,12 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   PaginatedQuizHistory,
+  QuizAttemptsListResponse,
   QuizCreateRequest,
   QuizGenerateRequest,
   QuizJobDetailResponse,
   QuizJobResponse,
   QuizResponse,
   QuizUpdateRequest,
+  TeacherQuizListResponse,
 } from '@/types/quiz';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -122,6 +124,48 @@ export function useUpdateQuiz(quizId: number | null) {
       qc.invalidateQueries({ queryKey: ['quiz', quizId] });
       qc.invalidateQueries({ queryKey: ['teacher-quizzes'] });
     },
+  });
+}
+
+// ── Teacher quiz list ─────────────────────────────────────────────────────────
+
+async function fetchTeacherQuizzes(classId?: string): Promise<TeacherQuizListResponse> {
+  const params = new URLSearchParams();
+  if (classId) params.set('class_id', classId);
+  const qs = params.toString();
+  const res = await fetch(`${API_URL}/api/v1/quiz${qs ? `?${qs}` : ''}`, FETCH_OPTS);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch quizzes');
+  }
+  return res.json();
+}
+
+export function useTeacherQuizzes(classId?: string) {
+  return useQuery({
+    queryKey: ['teacher-quizzes', classId],
+    queryFn: () => fetchTeacherQuizzes(classId),
+    staleTime: 30_000,
+  });
+}
+
+// ── Quiz attempts list (teacher) ──────────────────────────────────────────────
+
+async function fetchQuizAttempts(quizId: number): Promise<QuizAttemptsListResponse> {
+  const res = await fetch(`${API_URL}/api/v1/quiz/${quizId}/attempts`, FETCH_OPTS);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch attempts');
+  }
+  return res.json();
+}
+
+export function useQuizAttempts(quizId: number | null) {
+  return useQuery({
+    queryKey: ['quiz-attempts', quizId],
+    queryFn: () => fetchQuizAttempts(quizId!),
+    enabled: !!quizId,
+    staleTime: 30_000,
   });
 }
 

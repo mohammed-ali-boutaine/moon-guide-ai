@@ -130,3 +130,60 @@ A chatbot specialized in:
 - Portfolio advice
 - Choosing your next steps
 - Explaining career paths
+
+---
+
+## Project Status (2026-03-17)
+
+### Stack
+- **Backend:** FastAPI, Python 3.11, SQLAlchemy 2, Alembic, PostgreSQL 16, Redis 7, Qdrant, Celery
+- **Frontend:** Next.js 14 (App Router), React 18, TypeScript, TailwindCSS, TanStack Query v5
+- **Auth:** JWT in httpOnly cookies + Google SSO
+- **AI:** Gemini (`gemini-1.5-flash`) for RAG chat; Gemini (`models/text-embedding-004`, 768 dim) for embeddings (default); Mistral / Sentence Transformers available via `EMBEDDING_PROVIDER`; Qdrant for vector search
+
+### What's Built
+- Auth (JWT + Google SSO), sessions, RBAC (TEACHER / STUDENT / ADMIN)
+- Class CRUD — create, update, delete, enroll/remove students
+- Document upload + RAG pipeline (Celery: extract → chunk → embed → Qdrant)
+- Semantic search + full RAG chat API (class sessions + personal document sessions)
+- Quiz generation (LLM-based + manual), MCQ/True-False auto-correction, student quiz history
+- Quiz assignment to classes + notification system
+- Key-concept extraction with spaCy NLP pipeline
+- Personalised feedback + student/teacher analytics reports
+- Teacher dashboard with global class selector (header), class-scoped nav (sidebar), class-scoped documents/quizzes
+- Quiz attempt viewer for teachers (`/dashboard/teacher/quizzes/[id]/attempts`)
+
+### Recent Changes (last sprint)
+- Default embedding provider switched from Sentence Transformers to **Gemini** (`models/text-embedding-004`, 768 dim)
+- Global `ClassContext` — class selection persists in `localStorage`, visible in `AuthHeader`
+- Sidebar nav links update dynamically based on selected class
+- Teacher `documents` page redirects to class-specific documents automatically
+- Teacher `quizzes` page uses real endpoints (`GET /quiz`, `GET /quiz/{id}/attempts`)
+- Personalised feedback + student/teacher report endpoints added
+- **Bug fixes:**
+  - `class_id: int → UUID` in `classes.py` document endpoints (was causing 422)
+  - Added `include` list to `celery_app.py` so tasks are discovered by the worker
+  - Worker `docker-compose.yml` now listens on `documents,quiz,celery` queues
+
+### Not Built Yet
+- Chat frontend UI
+- Flashcards
+- Career features (skill gap, roadmap, job recommendations, AI mentor)
+- Analytics dashboard
+
+### Key File Paths
+| Layer | File |
+|---|---|
+| Backend entry | `backend/app/main.py` |
+| Config | `backend/app/core/config.py` |
+| Auth dependency | `backend/app/core/dependencies.py` |
+| Embedding service | `backend/app/services/embedding_service.py` |
+| Celery app | `backend/app/celery_app.py` |
+| Document pipeline | `backend/app/services/document_service.py` |
+| Class routes | `backend/app/api/v1/routes/classes.py` |
+| Quiz routes | `backend/app/api/v1/routes/quiz.py` |
+| Frontend auth context | `frontend/contexts/auth-context.tsx` |
+| Class context | `frontend/contexts/class-context.tsx` |
+| Header (class selector) | `frontend/components/layout/AuthHeader.tsx` |
+| Sidebar | `frontend/components/layout/Sidebar.tsx` |
+| Teacher dashboard | `frontend/app/dashboard/teacher/page.tsx` |

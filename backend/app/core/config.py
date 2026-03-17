@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/moon_guide"
     
     # Security
-    SECRET_KEY: str = "secret_key"
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -40,9 +40,14 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_PREFIX: str = "moonguide"
     
     # Embedding
-    EMBEDDING_PROVIDER: str = "sentence-transformers"  # "sentence-transformers" or "mistral"
-    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"  # Sentence Transformers model
+    EMBEDDING_PROVIDER: str = "gemini"  # "gemini" | "sentence-transformers" | "mistral"
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"  # Sentence Transformers model (fallback)
     EMBEDDING_DIMENSION: int = 384  # Dimension for all-MiniLM-L6-v2
+
+    # Gemini Embedding
+    GEMINI_EMBEDDING_MODEL: str = "models/text-embedding-004"
+    GEMINI_EMBEDDING_DIMENSION: int = 768
+    GEMINI_EMBEDDING_BATCH_SIZE: int = 100  # Max texts per API call
 
     # Mistral Embedding
     MISTRAL_API_KEY: str = ""

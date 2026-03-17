@@ -208,3 +208,44 @@ export interface PaginatedQuizHistory {
   page_size: number;
   total_pages: number;
 }
+
+// ── Teacher quiz list ─────────────────────────────────────────────────────────
+
+export interface TeacherQuizListItem {
+  id: number;
+  title: string;
+  description: string | null;
+  status: QuizStatus;
+  difficulty: QuizDifficulty | null;
+  class_id: string | null;
+  class_name: string | null;
+  question_count: number;
+  attempt_count: number;
+  avg_score: number | null;
+  created_at: string;
+}
+
+export interface TeacherQuizListResponse {
+  items: TeacherQuizListItem[];
+  total: number;
+}
+
+// ── Quiz attempt list (teacher view) ─────────────────────────────────────────
+
+export interface QuizAttemptItem {
+  attempt_id: number;
+  student_id: string;
+  student_email: string;
+  student_name: string | null;
+  status: AttemptStatus | 'submitted';
+  score: number | null;
+  started_at: string;
+  submitted_at: string | null;
+}
+
+export interface QuizAttemptsListResponse {
+  quiz_id: number;
+  quiz_title: string;
+  items: QuizAttemptItem[];
+  total: number;
+}

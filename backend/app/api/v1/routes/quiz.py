@@ -37,8 +37,10 @@ from app.models.quiz_attempt import AttemptStatus, QuizAttempt
 from app.models.quiz_job import JobStatus, QuizJob
 from app.models.student_answer import StudentAnswer
 from app.schemas.quiz import (
+    QuizAttemptItem,
     QuizAttemptStartResponse,
     QuizAttemptSubmitResponse,
+    QuizAttemptsListResponse,
     QuizCreateRequest,
     QuizGenerateRequest,
     QuizJobDetailResponse,
@@ -46,6 +48,8 @@ from app.schemas.quiz import (
     QuizResponse,
     QuizSubmitRequest,
     QuizUpdateRequest,
+    TeacherQuizListItem,
+    TeacherQuizListResponse,
 )
 from app.schemas.quiz_assignment import (
     AssignedQuizItem,
@@ -257,6 +261,165 @@ def get_quiz(
             )
 
     return QuizResponse.model_validate(quiz)
+
+
+# ── GET /quiz ─────────────────────────────────────────────────────────────────
+
+@router.get(
+    "",
+    response_model=TeacherQuizListResponse,
+    summary="List all quizzes owned by the authenticated teacher",
+)
+def list_teacher_quizzes(
+    current_user: TeacherUser,
+    db: Annotated[DBSession, Depends(get_db)],
+    class_id: uuid.UUID | None = None,
+) -> TeacherQuizListResponse:
+    """
+    Return all quizzes created by the teacher, enriched with:
+    - class name
+    - question count
+    - attempt count
+    - average score across all submitted attempts
+
+    Optionally filter by `class_id`.
+    """
+    from app.models.class_ import Class
+    from app.models.question import Question
+    from app.models.user_profile import UserProfile
+
+    # Base query: quizzes owned by teacher (via class ownership)
+    stmt = (
+        select(Quiz)
+        .join(Class, Class.id == Quiz.class_id, isouter=True)
+        .where(
+            (Class.teacher_id == current_user.id) | (Quiz.class_id.is_(None))
+        )
+    )
+    if class_id is not None:
+        stmt = stmt.where(Quiz.class_id == class_id)
+
+    quizzes = db.scalars(stmt.order_by(Quiz.created_at.desc())).all()
+
+    items: list[TeacherQuizListItem] = []
+    for quiz in quizzes:
+        # Class name
+        class_name: str | None = None
+        if quiz.class_id:
+            cls = db.scalar(select(Class).where(Class.id == quiz.class_id))
+            class_name = cls.name if cls else None
+
+        # Question count
+        q_count = db.scalar(
+            select(func.count()).select_from(Question).where(Question.quiz_id == quiz.id)
+        ) or 0
+
+        # Attempt stats (submitted only)
+        attempt_count = db.scalar(
+            select(func.count()).select_from(QuizAttempt).where(
+                QuizAttempt.quiz_id == quiz.id,
+                QuizAttempt.status == AttemptStatus.submitted,
+            )
+        ) or 0
+
+        avg_score: float | None = db.scalar(
+            select(func.avg(QuizAttempt.score)).where(
+                QuizAttempt.quiz_id == quiz.id,
+                QuizAttempt.status == AttemptStatus.submitted,
+                QuizAttempt.score.is_not(None),
+            )
+        )
+
+        items.append(
+            TeacherQuizListItem(
+                id=quiz.id,
+                title=quiz.title,
+                description=quiz.description,
+                status=quiz.status.value if hasattr(quiz.status, "value") else quiz.status,
+                difficulty=quiz.difficulty,
+                class_id=quiz.class_id,
+                class_name=class_name,
+                question_count=q_count,
+                attempt_count=attempt_count,
+                avg_score=round(avg_score, 1) if avg_score is not None else None,
+                created_at=quiz.created_at,
+            )
+        )
+
+    return TeacherQuizListResponse(items=items, total=len(items))
+
+
+# ── GET /quiz/{quiz_id}/attempts ──────────────────────────────────────────────
+
+@router.get(
+    "/{quiz_id}/attempts",
+    response_model=QuizAttemptsListResponse,
+    summary="List all student attempts for a quiz (teacher only)",
+)
+def list_quiz_attempts(
+    quiz_id: int,
+    current_user: TeacherUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> QuizAttemptsListResponse:
+    """
+    Return all attempts for a quiz, with student name, score, and status.
+    Only the teacher who owns the quiz's class can call this endpoint.
+    """
+    from app.models.class_ import Class
+    from app.models.user import User
+    from app.models.user_profile import UserProfile
+
+    quiz = db.scalar(select(Quiz).where(Quiz.id == quiz_id))
+    if quiz is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
+
+    # Verify teacher owns the quiz's class
+    if quiz.class_id is not None:
+        cls = db.scalar(select(Class).where(Class.id == quiz.class_id))
+        if cls is None or str(cls.teacher_id) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not own this quiz's class.",
+            )
+
+    attempts = db.scalars(
+        select(QuizAttempt)
+        .where(QuizAttempt.quiz_id == quiz_id)
+        .order_by(QuizAttempt.started_at.desc())
+    ).all()
+
+    items: list[QuizAttemptItem] = []
+    for attempt in attempts:
+        student = db.scalar(select(User).where(User.id == attempt.student_id))
+        if student is None:
+            continue
+        profile = db.scalar(
+            select(UserProfile).where(UserProfile.user_id == student.id)
+        )
+        student_name: str | None = None
+        if profile:
+            full = f"{profile.first_name or ''} {profile.last_name or ''}".strip()
+            student_name = full or None
+
+        items.append(
+            QuizAttemptItem(
+                attempt_id=attempt.id,
+                student_id=attempt.student_id,
+                student_email=student.email,
+                student_name=student_name,
+                status=attempt.status.value if hasattr(attempt.status, "value") else attempt.status,
+                score=attempt.score,
+                started_at=attempt.started_at,
+                submitted_at=attempt.submitted_at,
+            )
+        )
+
+    return QuizAttemptsListResponse(
+        quiz_id=quiz_id,
+        quiz_title=quiz.title,
+        items=items,
+        total=len(items),
+    )
 
 
 # ── POST /quiz ────────────────────────────────────────────────────────────────

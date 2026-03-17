@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { useClassContext } from '@/contexts/class-context';
 import { useState, useEffect } from 'react';
 
 interface SidebarItem {
@@ -12,16 +13,11 @@ interface SidebarItem {
   icon: React.ReactNode;
 }
 
-// Icons
+// ── Icons ──────────────────────────────────────────────────────────────────────
+
 const DashboardIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-  </svg>
-);
-
-const ClassesIcon = () => (
-  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
   </svg>
 );
 
@@ -37,6 +33,12 @@ const QuizzesIcon = () => (
   </svg>
 );
 
+const ChatIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+  </svg>
+);
+
 const StudentsIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -46,6 +48,12 @@ const StudentsIcon = () => (
 const AnalyticsIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+  </svg>
+);
+
+const ClassesIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
   </svg>
 );
 
@@ -74,16 +82,9 @@ const SettingsIcon = () => (
   </svg>
 );
 
-// Navigation items by role
-const navigationItems: Record<string, SidebarItem[]> = {
-  TEACHER: [
-    { href: '/dashboard/teacher', label: 'Dashboard', icon: <DashboardIcon /> },
-    { href: '/dashboard/teacher/classes', label: 'My Classes', icon: <ClassesIcon /> },
-    { href: '/dashboard/teacher/documents', label: 'Documents', icon: <DocumentsIcon /> },
-    { href: '/dashboard/teacher/quizzes', label: 'Quizzes', icon: <QuizzesIcon /> },
-    { href: '/dashboard/teacher/students', label: 'Students', icon: <StudentsIcon /> },
-    { href: '/dashboard/teacher/analytics', label: 'Analytics', icon: <AnalyticsIcon /> },
-  ],
+// ── Static nav items for non-teacher roles ─────────────────────────────────────
+
+const staticNavItems: Record<string, SidebarItem[]> = {
   STUDENT: [
     { href: '/dashboard/student', label: 'Dashboard', icon: <DashboardIcon /> },
     { href: '/dashboard/student/classes', label: 'My Classes', icon: <ClassesIcon /> },
@@ -102,6 +103,8 @@ const navigationItems: Record<string, SidebarItem[]> = {
   ],
 };
 
+// ── Sidebar component ─────────────────────────────────────────────────────────
+
 interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
@@ -112,18 +115,58 @@ interface SidebarProps {
 export default function Sidebar({ isOpen = true, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { selectedClassId, selectedClass } = useClassContext();
   const [isScrolled, setIsScrolled] = useState(false);
 
   const role = user?.role || 'STUDENT';
-  const navItems = navigationItems[role] || navigationItems.STUDENT;
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Build teacher nav dynamically based on selected class
+  const teacherNavItems: SidebarItem[] = [
+    {
+      href: '/dashboard/teacher',
+      label: 'Dashboard',
+      icon: <DashboardIcon />,
+    },
+    {
+      href: selectedClassId
+        ? `/dashboard/teacher/classes/${selectedClassId}/documents`
+        : '/dashboard/teacher/documents',
+      label: 'Documents',
+      icon: <DocumentsIcon />,
+    },
+    {
+      href: '/dashboard/teacher/quizzes',
+      label: 'Quizzes',
+      icon: <QuizzesIcon />,
+    },
+    {
+      href: selectedClassId
+        ? `/dashboard/teacher/classes/${selectedClassId}/chat`
+        : '/dashboard/teacher/classes',
+      label: 'Chat',
+      icon: <ChatIcon />,
+    },
+    {
+      href: selectedClassId
+        ? `/dashboard/teacher/classes/${selectedClassId}`
+        : '/dashboard/teacher/students',
+      label: 'Students',
+      icon: <StudentsIcon />,
+    },
+    {
+      href: '/dashboard/teacher/analytics',
+      label: 'Analytics',
+      icon: <AnalyticsIcon />,
+    },
+  ];
+
+  const navItems = role === 'TEACHER' ? teacherNavItems : (staticNavItems[role] ?? staticNavItems.STUDENT);
 
   return (
     <>
@@ -135,18 +178,22 @@ export default function Sidebar({ isOpen = true, onClose, collapsed = false, onT
           isScrolled ? 'top-14 h-[calc(100vh-3.5rem)]' : 'top-16 h-[calc(100vh-4rem)]'
         )}
       >
+        {/* Collapse toggle */}
         <div className="flex items-center justify-end p-3 border-b border-gray-800 h-14">
+          {/* Selected class badge (when not collapsed) */}
+          {!collapsed && selectedClass && role === 'TEACHER' && (
+            <span className="flex-1 truncate text-xs text-primary-400 font-medium px-1" title={selectedClass.name}>
+              {selectedClass.name}
+            </span>
+          )}
           <button
             onClick={onToggleCollapse}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
             title={collapsed ? 'Expand' : 'Collapse'}
           >
-            <svg 
-              className={cn('w-5 h-5 transition-transform duration-300', collapsed && 'rotate-180')} 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor" 
-              strokeWidth={2}
+            <svg
+              className={cn('w-5 h-5 transition-transform duration-300', collapsed && 'rotate-180')}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
             </svg>
@@ -157,15 +204,14 @@ export default function Sidebar({ isOpen = true, onClose, collapsed = false, onT
           {navItems.map((item) => {
             const isExactMatch = pathname === item.href;
             const isParentMatch = pathname.startsWith(`${item.href}/`);
-            // Only highlight parent if no other item has an exact or closer match
-            const isActive = isExactMatch || (isParentMatch && !navItems.some(other => 
-              other.href !== item.href && 
+            const isActive = isExactMatch || (isParentMatch && !navItems.some(other =>
+              other.href !== item.href &&
               (pathname === other.href || pathname.startsWith(`${other.href}/`)) &&
               other.href.length > item.href.length
             ));
             return (
               <Link
-                key={item.href}
+                key={item.label}
                 href={item.href}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
@@ -183,11 +229,12 @@ export default function Sidebar({ isOpen = true, onClose, collapsed = false, onT
           })}
         </nav>
 
+        {/* User info footer */}
         <div className={cn('border-t border-gray-800', collapsed ? 'p-2' : 'p-4')}>
           {!collapsed ? (
             <div className="flex items-center gap-3">
               {user?.profile?.avatar_url ? (
-               <img
+                <img
                   src={`${process.env.NEXT_PUBLIC_API_URL}${user.profile.avatar_url}`}
                   alt="avatar"
                   className="h-8 w-8 rounded-full object-cover ring-2 ring-gray-700"
@@ -227,10 +274,7 @@ export default function Sidebar({ isOpen = true, onClose, collapsed = false, onT
       </aside>
 
       {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={onClose} />
       )}
     </>
   );

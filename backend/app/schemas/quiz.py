@@ -151,3 +151,48 @@ class QuizAttemptSubmitResponse(BaseModel):
     answers_recorded: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ── Teacher quiz list ─────────────────────────────────────────────────────────
+
+class TeacherQuizListItem(BaseModel):
+    id: int
+    title: str
+    description: Optional[str]
+    status: str
+    difficulty: Optional[str]
+    class_id: Optional[uuid.UUID]
+    class_name: Optional[str]
+    question_count: int
+    attempt_count: int
+    avg_score: Optional[float]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TeacherQuizListResponse(BaseModel):
+    items: list[TeacherQuizListItem]
+    total: int
+
+
+# ── Quiz attempt list (teacher view) ─────────────────────────────────────────
+
+class QuizAttemptItem(BaseModel):
+    attempt_id: int
+    student_id: uuid.UUID
+    student_email: str
+    student_name: Optional[str]
+    status: str
+    score: Optional[float]
+    started_at: datetime
+    submitted_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class QuizAttemptsListResponse(BaseModel):
+    quiz_id: int
+    quiz_title: str
+    items: list[QuizAttemptItem]
+    total: int

@@ -329,7 +329,7 @@ async def remove_student_from_class(
 
 @router.post("/{class_id}/documents", response_model=DocumentUploadResponse, status_code=201)
 async def upload_class_doc(
-    class_id: int,
+    class_id: UUID,
     background_tasks: BackgroundTasks,
     current_user: Annotated[StudentUser | TeacherUser, Depends(get_current_user)],
     db: Annotated[DBSession, Depends(get_db)],
@@ -368,7 +368,7 @@ async def upload_class_doc(
 
 @router.get("/{class_id}/documents", response_model=DocumentListResponse)
 def get_class_documents(
-    class_id: int,
+    class_id: UUID,
     currentUser : CurrentUser,
     db: Annotated[DBSession, Depends(get_db)]
 ):

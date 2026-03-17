@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/contexts/auth-context';
 import { QueryProvider } from '@/contexts/query-provider';
+import { ClassProvider } from '@/contexts/class-context';
 import LayoutWrapper from '@/components/layout/LayoutWrapper';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { ToastContainer } from '@/components/ui/Toast';
@@ -26,7 +27,9 @@ export default function RootLayout({
         <NotificationProvider>
           <QueryProvider>
             <AuthProvider>
-              <LayoutWrapper>{children}</LayoutWrapper>
+              <ClassProvider>
+                <LayoutWrapper>{children}</LayoutWrapper>
+              </ClassProvider>
             </AuthProvider>
           </QueryProvider>
           <ToastContainer />

@@ -1,9 +1,10 @@
 """
 services/embedding_service.py
 
-Manages text-to-vector embeddings with two provider options:
-  1. Sentence Transformers (local, free, default)
-  2. Mistral AI (API-based, higher quality)
+Manages text-to-vector embeddings with three provider options:
+  1. Gemini (Google GenAI API, default) — models/text-embedding-004, 768 dim
+  2. Sentence Transformers (local, free) — all-MiniLM-L6-v2, 384 dim
+  3. Mistral AI (API-based) — mistral-embed, 1024 dim
 
 Features:
   - Lazy-loaded model / client singletons
@@ -44,11 +45,12 @@ def _cache_key(text: str) -> str:
     """Deterministic Redis key for a text's embedding."""
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
     provider = settings.EMBEDDING_PROVIDER
-    model = (
-        settings.MISTRAL_EMBEDDING_MODEL
-        if provider == "mistral"
-        else settings.EMBEDDING_MODEL
-    )
+    if provider == "gemini":
+        model = settings.GEMINI_EMBEDDING_MODEL
+    elif provider == "mistral":
+        model = settings.MISTRAL_EMBEDDING_MODEL
+    else:
+        model = settings.EMBEDDING_MODEL
     return f"{settings.EMBEDDING_CACHE_PREFIX}{provider}:{model}:{digest}"
 
 
@@ -100,6 +102,68 @@ def _set_cached_embeddings(texts: list[str], vectors: list[list[float]]) -> None
         logger.debug("Cached %d embeddings (TTL=%ds)", len(texts), settings.EMBEDDING_CACHE_TTL)
     except Exception as exc:
         logger.warning("Redis cache write failed: %s", exc)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Provider: Gemini (Google GenAI)
+# ══════════════════════════════════════════════════════════════════════════════
+
+_gemini_client = None
+
+
+def _get_gemini_client():
+    """Lazy-initialise the Google GenAI client for embeddings."""
+    global _gemini_client
+    if _gemini_client is None:
+        if not settings.GEMINI_API_KEY:
+            raise RuntimeError(
+                "GEMINI_API_KEY is required when EMBEDDING_PROVIDER='gemini'. "
+                "Set it in your .env file."
+            )
+        from google import genai
+
+        _gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        logger.info(
+            "Gemini embedding client initialised (model=%s, dim=%d)",
+            settings.GEMINI_EMBEDDING_MODEL,
+            settings.GEMINI_EMBEDDING_DIMENSION,
+        )
+    return _gemini_client
+
+
+def _embed_texts_gemini(texts: list[str]) -> list[list[float]]:
+    """
+    Encode texts using the Gemini Embeddings API with automatic batching.
+
+    Uses ``GEMINI_EMBEDDING_BATCH_SIZE`` texts per call and processes
+    batches sequentially to stay within API limits.
+    """
+    client = _get_gemini_client()
+    model = settings.GEMINI_EMBEDDING_MODEL
+    batch_size = settings.GEMINI_EMBEDDING_BATCH_SIZE
+
+    num_batches = math.ceil(len(texts) / batch_size)
+    logger.info(
+        "Gemini embedding: %d texts → %d batches (batch_size=%d)",
+        len(texts), num_batches, batch_size,
+    )
+
+    all_vectors: list[list[float]] = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
+        try:
+            response = client.models.embed_content(model=model, contents=batch)
+            all_vectors.extend([e.values for e in response.embeddings])
+        except Exception as exc:
+            logger.error("Gemini embedding failed for batch %d: %s", i // batch_size, exc)
+            raise
+
+    _token_usage["provider"] = "gemini"
+    _token_usage["total_requests"] += num_batches
+    estimated_tokens = sum(len(t.split()) for t in texts) * 1.3
+    _token_usage["total_tokens"] += int(estimated_tokens)
+
+    return all_vectors
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -290,14 +354,16 @@ def embed_texts(texts: list[str], batch_size: int = 64) -> list[list[float]]:
     if miss_indices:
         miss_texts = [texts[i] for i in miss_indices]
 
-        if provider == "mistral":
+        if provider == "gemini":
+            new_vectors = _embed_texts_gemini(miss_texts)
+        elif provider == "mistral":
             new_vectors = _embed_texts_mistral(miss_texts)
         elif provider == "sentence-transformers":
             new_vectors = _embed_texts_sentence_transformers(miss_texts, batch_size)
         else:
             raise ValueError(
                 f"Unknown EMBEDDING_PROVIDER '{provider}'. "
-                "Use 'sentence-transformers' or 'mistral'."
+                "Use 'gemini', 'sentence-transformers', or 'mistral'."
             )
 
         # Merge back into cached_results
@@ -335,7 +401,9 @@ def get_embedding_dimension() -> int:
     - Mistral: configured dimension (default 1024)
     """
     provider = settings.EMBEDDING_PROVIDER
-    if provider == "mistral":
+    if provider == "gemini":
+        return settings.GEMINI_EMBEDDING_DIMENSION
+    elif provider == "mistral":
         return settings.MISTRAL_EMBEDDING_DIMENSION
     else:
         model = _get_st_model()
@@ -345,7 +413,15 @@ def get_embedding_dimension() -> int:
 def get_active_provider_info() -> dict:
     """Return a summary of the active embedding provider configuration."""
     provider = settings.EMBEDDING_PROVIDER
-    if provider == "mistral":
+    if provider == "gemini":
+        return {
+            "provider": "gemini",
+            "model": settings.GEMINI_EMBEDDING_MODEL,
+            "dimension": settings.GEMINI_EMBEDDING_DIMENSION,
+            "batch_size": settings.GEMINI_EMBEDDING_BATCH_SIZE,
+            "cache_enabled": settings.EMBEDDING_CACHE_ENABLED,
+        }
+    elif provider == "mistral":
         return {
             "provider": "mistral",
             "model": settings.MISTRAL_EMBEDDING_MODEL,

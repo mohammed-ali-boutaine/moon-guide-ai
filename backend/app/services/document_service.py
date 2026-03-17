@@ -551,7 +551,7 @@ def upload_personal_document(
         document_id=doc.id,
         file_path=file_path,
         file_type=file_type.value,
-        db_url=str(db.bind.url),
+        db_url=str(settings.DATABASE_URL),
         class_id=None,
     )
 
@@ -605,7 +605,7 @@ def upload_class_document(
             document_id=doc.id,
             file_path=file_path,
             file_type=file_type.value,
-            db_url=str(db.bind.url),
+            db_url=str(settings.DATABASE_URL),
             class_id=str(class_id),
         )
     else:
@@ -694,7 +694,7 @@ def approve_document(
         document_id=doc.id,
         file_path=doc.file_url,
         file_type=doc.file_type.value,
-        db_url=str(db.bind.url),
+        db_url=str(settings.DATABASE_URL),
         class_id=str(doc.class_id) if doc.class_id else None,
     )
 

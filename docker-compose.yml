@@ -108,7 +108,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: moon-guide-worker
-    command: celery -A app.celery_app worker --loglevel=info --queues=documents
+    command: celery -A app.celery_app worker --loglevel=info --queues=documents,quiz,celery
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-moon_guide}
       REDIS_URL: redis://redis:6379

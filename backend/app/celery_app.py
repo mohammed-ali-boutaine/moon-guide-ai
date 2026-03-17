@@ -5,11 +5,17 @@ celery = Celery(
     "tasks",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
+    include=[
+        "app.services.document_service",
+        "app.services.quiz_service",
+        "app.services.grading_service",
+    ],
 )
 
 celery.conf.task_routes = {
     "app.services.document_service.*": {"queue": "documents"},
     "app.services.quiz_service.*": {"queue": "quiz"},
+    "app.services.grading_service.*": {"queue": "quiz"},
 }
 
 celery.conf.update(
