@@ -6,26 +6,22 @@ Complete RAG (Retrieval-Augmented Generation) pipeline:
   Step 2 – Rank by relevance (score-based filtering + sorting)
   Step 3 – Build context string from ranked chunks
   Step 4 – Prompt engineering (system prompt + history + user query)
-  Step 5 – Call Gemini LLM with retry logic
+  Step 5 – Call Mistral LLM with retry logic
   Step 6 – Parse response and extract token usage
 
 Error handling:
   - No relevant documents found → graceful fallback message
-  - Gemini API errors         → exponential-backoff retries
+  - Mistral API errors         → exponential-backoff retries
   - Token usage               → logged and returned in result
 """
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import Optional
 
-from google import genai
-from google.genai import types as genai_types
-from google.genai import errors as genai_errors
-
 from app.core.config import settings
 from app.core.logging import logger
+from app.services.llm_service import call_llm
 from app.services.vector_service import semantic_search
 
 
@@ -82,18 +78,6 @@ class RAGResult:
     error: Optional[str] = None
 
 
-# ── Gemini client (lazy init) ─────────────────────────────────────────────────
-
-_gemini_client: genai.Client | None = None
-
-
-def _get_gemini_client() -> genai.Client:
-    global _gemini_client
-    if _gemini_client is None:
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is not configured.")
-        _gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    return _gemini_client
 
 
 # ── Step 1: Retrieve ──────────────────────────────────────────────────────────
@@ -248,70 +232,6 @@ def _build_prompt(
     return "\n\n".join(sections)
 
 
-# ── Step 5: Call Gemini with retries ─────────────────────────────────────────
-
-def _call_gemini(prompt: str) -> tuple[str, int, int, int]:
-    """
-    Call the Gemini API with exponential-backoff retries.
-
-    Returns:
-        (answer_text, prompt_tokens, completion_tokens, total_tokens)
-
-    Raises:
-        RuntimeError: if all retries are exhausted.
-    """
-    client = _get_gemini_client()
-    last_exc: Exception | None = None
-    delay = settings.GEMINI_RETRY_DELAY
-
-    for attempt in range(1, settings.GEMINI_MAX_RETRIES + 1):
-        try:
-            response = client.models.generate_content(
-                model=settings.GEMINI_MODEL,
-                contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS,
-                    temperature=settings.GEMINI_TEMPERATURE,
-                ),
-            )
-
-            answer = response.text or ""
-
-            # Token usage from Gemini metadata
-            usage = getattr(response, "usage_metadata", None)
-            prompt_tokens = getattr(usage, "prompt_token_count", 0) or 0
-            completion_tokens = getattr(usage, "candidates_token_count", 0) or 0
-            total_tokens = getattr(usage, "total_token_count", 0) or (prompt_tokens + completion_tokens)
-
-            logger.info(
-                "Gemini call successful: attempt=%d tokens(prompt=%d, completion=%d, total=%d)",
-                attempt, prompt_tokens, completion_tokens, total_tokens,
-            )
-            return answer, prompt_tokens, completion_tokens, total_tokens
-
-        except genai_errors.ClientError as exc:
-            # 429 rate limit or other 4xx — retry for rate limits, raise for others
-            if getattr(exc, "status_code", None) == 429:
-                logger.warning("Gemini rate limit (attempt %d/%d): %s", attempt, settings.GEMINI_MAX_RETRIES, exc)
-                last_exc = exc
-            else:
-                logger.error("Gemini client error (non-retryable): %s", exc)
-                raise RuntimeError(f"Gemini API error: {exc}") from exc
-        except genai_errors.ServerError as exc:
-            logger.warning("Gemini server error (attempt %d/%d): %s", attempt, settings.GEMINI_MAX_RETRIES, exc)
-            last_exc = exc
-        except Exception as exc:
-            logger.error("Gemini unexpected error (attempt %d/%d): %s", attempt, settings.GEMINI_MAX_RETRIES, exc)
-            last_exc = exc
-
-        if attempt < settings.GEMINI_MAX_RETRIES:
-            logger.info("Retrying Gemini in %.1fs…", delay)
-            time.sleep(delay)
-            delay *= 2  # exponential backoff
-
-    raise RuntimeError(
-        f"Gemini failed after {settings.GEMINI_MAX_RETRIES} attempts. Last error: {last_exc}"
-    )
 
 
 # ── Step 6: Build sources list ────────────────────────────────────────────────
@@ -409,11 +329,15 @@ def run_rag_pipeline(
 
     logger.debug("RAG prompt length: %d chars", len(prompt))
 
-    # ── Step 5: Call Gemini ───────────────────────────────────────────────────
+    # ── Step 5: Call LLM ─────────────────────────────────────────────────────
     try:
-        answer, prompt_tokens, completion_tokens, total_tokens = _call_gemini(prompt)
+        answer, prompt_tokens, completion_tokens, total_tokens = call_llm(
+            prompt,
+            temperature=settings.LLM_TEMPERATURE,
+            max_tokens=settings.LLM_MAX_OUTPUT_TOKENS,
+        )
     except RuntimeError as exc:
-        logger.error("Gemini call failed: %s", exc)
+        logger.error("LLM call failed: %s", exc)
         return RAGResult(
             answer="I'm sorry, I'm having trouble generating a response right now. Please try again later.",
             sources=_build_sources(ranked_chunks),

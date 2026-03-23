@@ -209,6 +209,27 @@ export interface PaginatedQuizHistory {
   total_pages: number;
 }
 
+// ── Student assigned quizzes ──────────────────────────────────────────────────
+
+export interface AssignedByInfo {
+  id: string;
+  email: string;
+}
+
+export interface StudentAssignedQuizItem {
+  assignment_id: string;
+  assignment_status: string;
+  assigned_at: string;
+  assigned_by: AssignedByInfo;
+  due_date: string | null;
+  class_id: string;
+  class_name: string;
+  quiz: QuizResponse;
+  attempt_id: number | null;
+  attempt_status: 'started' | 'in_progress' | 'submitted' | null;
+  score: number | null;
+}
+
 // ── Teacher quiz list ─────────────────────────────────────────────────────────
 
 export interface TeacherQuizListItem {

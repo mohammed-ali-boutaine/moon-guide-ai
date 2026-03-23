@@ -1,4 +1,4 @@
-backend/Model-conversaion.md[project]
+[project]
 name = "moon-guide-backend"
 version = "0.1.0"
 description = "Moon Guide AI Backend"

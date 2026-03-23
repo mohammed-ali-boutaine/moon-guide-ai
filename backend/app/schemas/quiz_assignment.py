@@ -56,6 +56,24 @@ class AssignedQuizItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class StudentAssignedQuizItem(BaseModel):
+    """Quiz assignment item for student view — includes class info and attempt status."""
+
+    assignment_id: uuid.UUID
+    assignment_status: str
+    assigned_at: datetime
+    assigned_by: AssignedByInfo
+    due_date: Optional[datetime]
+    class_id: uuid.UUID
+    class_name: str
+    quiz: QuizResponse
+    attempt_id: Optional[int] = None
+    attempt_status: Optional[str] = None  # 'started' | 'in_progress' | 'submitted'
+    score: Optional[float] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class NotificationResponse(BaseModel):
     id: uuid.UUID
     type: str

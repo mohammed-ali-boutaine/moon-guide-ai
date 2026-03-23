@@ -10,6 +10,7 @@ import type {
   QuizJobResponse,
   QuizResponse,
   QuizUpdateRequest,
+  StudentAssignedQuizItem,
   TeacherQuizListResponse,
 } from '@/types/quiz';
 
@@ -23,7 +24,7 @@ const FETCH_OPTS: RequestInit = {
 // ── API functions ─────────────────────────────────────────────────────────────
 
 async function generateQuiz(body: QuizGenerateRequest): Promise<QuizJobResponse> {
-  const res = await fetch(`${API_URL}/api/v1/quiz/generate`, {
+  const res = await fetch(`${API_URL}/api/quiz/generate`, {
     method: 'POST',
     ...FETCH_OPTS,
     body: JSON.stringify(body),
@@ -36,7 +37,7 @@ async function generateQuiz(body: QuizGenerateRequest): Promise<QuizJobResponse>
 }
 
 async function pollQuizJob(jobId: string): Promise<QuizJobDetailResponse> {
-  const res = await fetch(`${API_URL}/api/v1/quiz/jobs/${jobId}`, FETCH_OPTS);
+  const res = await fetch(`${API_URL}/api/quiz/jobs/${jobId}`, FETCH_OPTS);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to fetch job status');
@@ -45,7 +46,7 @@ async function pollQuizJob(jobId: string): Promise<QuizJobDetailResponse> {
 }
 
 async function fetchQuiz(quizId: number): Promise<QuizResponse> {
-  const res = await fetch(`${API_URL}/api/v1/quiz/${quizId}`, FETCH_OPTS);
+  const res = await fetch(`${API_URL}/api/quiz/${quizId}`, FETCH_OPTS);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to fetch quiz');
@@ -54,7 +55,7 @@ async function fetchQuiz(quizId: number): Promise<QuizResponse> {
 }
 
 async function createQuiz(body: QuizCreateRequest): Promise<QuizResponse> {
-  const res = await fetch(`${API_URL}/api/v1/quiz`, {
+  const res = await fetch(`${API_URL}/api/quiz`, {
     method: 'POST',
     ...FETCH_OPTS,
     body: JSON.stringify(body),
@@ -67,7 +68,7 @@ async function createQuiz(body: QuizCreateRequest): Promise<QuizResponse> {
 }
 
 async function updateQuiz(quizId: number, body: QuizUpdateRequest): Promise<QuizResponse> {
-  const res = await fetch(`${API_URL}/api/v1/quiz/${quizId}`, {
+  const res = await fetch(`${API_URL}/api/quiz/${quizId}`, {
     method: 'PATCH',
     ...FETCH_OPTS,
     body: JSON.stringify(body),
@@ -133,7 +134,7 @@ async function fetchTeacherQuizzes(classId?: string): Promise<TeacherQuizListRes
   const params = new URLSearchParams();
   if (classId) params.set('class_id', classId);
   const qs = params.toString();
-  const res = await fetch(`${API_URL}/api/v1/quiz${qs ? `?${qs}` : ''}`, FETCH_OPTS);
+  const res = await fetch(`${API_URL}/api/quiz${qs ? `?${qs}` : ''}`, FETCH_OPTS);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to fetch quizzes');
@@ -152,7 +153,7 @@ export function useTeacherQuizzes(classId?: string) {
 // ── Quiz attempts list (teacher) ──────────────────────────────────────────────
 
 async function fetchQuizAttempts(quizId: number): Promise<QuizAttemptsListResponse> {
-  const res = await fetch(`${API_URL}/api/v1/quiz/${quizId}/attempts`, FETCH_OPTS);
+  const res = await fetch(`${API_URL}/api/quiz/${quizId}/attempts`, FETCH_OPTS);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to fetch attempts');
@@ -166,6 +167,51 @@ export function useQuizAttempts(quizId: number | null) {
     queryFn: () => fetchQuizAttempts(quizId!),
     enabled: !!quizId,
     staleTime: 30_000,
+  });
+}
+
+// ── Assign quiz to class ──────────────────────────────────────────────────────
+
+async function assignQuiz(quizId: number, classId: string, dueDate?: string) {
+  const res = await fetch(`${API_URL}/api/quiz/${quizId}/assign`, {
+    method: 'POST',
+    ...FETCH_OPTS,
+    body: JSON.stringify({ class_id: classId, due_date: dueDate ?? null }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to assign quiz');
+  }
+  return res.json();
+}
+
+export function useAssignQuiz() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ quizId, classId, dueDate }: { quizId: number; classId: string; dueDate?: string }) =>
+      assignQuiz(quizId, classId, dueDate),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teacher-quizzes'] });
+    },
+  });
+}
+
+// ── Student assigned quizzes ──────────────────────────────────────────────────
+
+async function fetchStudentAssignedQuizzes(): Promise<StudentAssignedQuizItem[]> {
+  const res = await fetch(`${API_URL}/api/students/me/assigned-quizzes`, FETCH_OPTS);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch assigned quizzes');
+  }
+  return res.json();
+}
+
+export function useStudentAssignedQuizzes() {
+  return useQuery({
+    queryKey: ['student-assigned-quizzes'],
+    queryFn: fetchStudentAssignedQuizzes,
+    staleTime: 60_000,
   });
 }
 
@@ -185,7 +231,7 @@ async function fetchQuizHistory(
   if (classId) params.set('class_id', classId);
 
   const res = await fetch(
-    `${API_URL}/api/v1/students/me/quiz-history?${params}`,
+    `${API_URL}/api/students/me/quiz-history?${params}`,
     FETCH_OPTS,
   );
   if (!res.ok) {

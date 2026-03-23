@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Background
 from sqlalchemy.orm import Session as DBSession
 
 from app.models.document import RoleEnum
+from app.models.role import RoleName
 
 from app.schemas.document import (
     DocumentUploadResponse,
@@ -342,7 +343,7 @@ async def upload_class_doc(
     """
 
     uploaded_by_id = current_user.id
-    uploaded_by_role = RoleEnum.teacher if isinstance(current_user, TeacherUser) else RoleEnum.student
+    uploaded_by_role = RoleEnum.teacher if current_user.role.name == RoleName.TEACHER else RoleEnum.student
 
     doc = upload_class_document(
         file=file,
@@ -377,19 +378,19 @@ def get_class_documents(
     # if teacher check if he class creator
     # if admin return
 
-    if currentUser.role.name == RoleEnum.student.value:
+    if currentUser.role.name == RoleName.STUDENT:
         if not ClassService.is_student_in_class(db, class_id, currentUser.id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You are not enrolled in this class",
             )
-    elif currentUser.role.name == RoleEnum.teacher.value:
+    elif currentUser.role.name == RoleName.TEACHER:
         if not ClassService.is_teacher_of_class(db, class_id, currentUser.id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to access documents for this class",
             )
-    elif currentUser.role.name == RoleEnum.admin.value:
+    elif currentUser.role.name == RoleName.ADMIN:
         pass  # Admin can access all documents
 
     docs = list_class_documents(class_id=class_id, db=db)

@@ -69,8 +69,12 @@ def ensure_collection(
     try:
         client.get_collection(collection_name)
         logger.debug("Collection '%s' already exists", collection_name)
+        return
     except (UnexpectedResponse, Exception):
-        logger.info("Creating Qdrant collection '%s' (dim=%d)", collection_name, vector_size)
+        pass
+
+    logger.info("Creating Qdrant collection '%s' (dim=%d)", collection_name, vector_size)
+    try:
         client.create_collection(
             collection_name=collection_name,
             vectors_config=qmodels.VectorParams(
@@ -83,6 +87,12 @@ def ensure_collection(
             ),
         )
         logger.info("Collection '%s' created", collection_name)
+    except (UnexpectedResponse, Exception) as exc:
+        # Another parallel worker may have created it between our get and create calls
+        if "already exists" in str(exc).lower():
+            logger.debug("Collection '%s' was created concurrently, continuing", collection_name)
+        else:
+            raise
 
 
 def delete_collection(collection_name: str) -> bool:
@@ -144,13 +154,15 @@ def search_vectors(
     """
     client = get_qdrant_client()
     try:
-        results = client.search(
+        response = client.query_points(
             collection_name=collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=limit,
             score_threshold=score_threshold,
             query_filter=filter_conditions,
+            with_payload=True,
         )
+        results = response.points
         logger.info(
             "Search in '%s' returned %d results (limit=%d, threshold=%.2f)",
             collection_name, len(results), limit, score_threshold,
@@ -185,7 +197,6 @@ def get_collection_info(collection_name: str) -> Optional[dict]:
         info = client.get_collection(collection_name)
         return {
             "name": collection_name,
-            "vectors_count": info.vectors_count,
             "points_count": info.points_count,
             "status": info.status.value if info.status else "unknown",
         }

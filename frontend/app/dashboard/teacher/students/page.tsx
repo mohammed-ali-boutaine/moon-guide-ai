@@ -222,7 +222,11 @@ export default function TeacherStudentsPage() {
                   const initials = getInitials(student.first_name, student.last_name, student.email);
                   const name = `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.email;
                   return (
-                    <div key={`${student.id}-${student.class_id}`} className="flex items-center gap-4 px-6 py-4 hover:bg-gray-800/30 transition-colors">
+                    <Link
+                      key={`${student.id}-${student.class_id}`}
+                      href={`/dashboard/teacher/students/${student.id}`}
+                      className="flex items-center gap-4 px-6 py-4 hover:bg-gray-800/30 transition-colors"
+                    >
                       {/* Avatar */}
                       <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white font-semibold text-sm shrink-0">
                         {initials}
@@ -236,19 +240,16 @@ export default function TeacherStudentsPage() {
 
                       {/* Class badge */}
                       {selectedClassId === 'all' && (
-                        <Link
-                          href={`/dashboard/teacher/classes/${student.class_id}`}
-                          className="hidden sm:inline-flex px-2.5 py-1 text-xs font-medium bg-gray-800 text-gray-300 rounded-md border border-gray-700 hover:border-gray-600 hover:text-gray-100 transition-colors shrink-0"
-                        >
+                        <span className="hidden sm:inline-flex px-2.5 py-1 text-xs font-medium bg-gray-800 text-gray-300 rounded-md border border-gray-700 shrink-0">
                           {student.class_name}
-                        </Link>
+                        </span>
                       )}
 
                       {/* Joined date */}
                       <span className="text-xs text-gray-500 shrink-0">
                         Joined {formatDate(student.joined_at)}
                       </span>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>

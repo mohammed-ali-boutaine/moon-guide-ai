@@ -4,10 +4,10 @@ services/quiz_service.py
 Quiz generation pipeline:
   1. Load document chunks from Postgres
   2. Get top extracted concepts (spaCy/TextRank/TF-IDF) from Postgres
-  3. Build a structured Gemini prompt requesting JSON output
-  4. Call Gemini LLM (with retries)
+  3. Build a structured Mistral prompt requesting JSON output
+  4. Call Mistral LLM (with retries)
   5. Parse and structurally validate JSON response
-  6. LLM re-check: ask Gemini to verify each answer is correct
+  6. LLM re-check: ask Mistral to verify each answer is correct
   7. Deduplicate questions (normalized text fingerprint)
   8. Persist Quiz + Questions + Answers to Postgres
   9. Update QuizJob status (completed / failed)
@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import re
-import time
 import uuid
 from typing import Any
 
@@ -127,60 +126,19 @@ Output ONLY valid JSON:
 """
 
 
-# ── Gemini helper (reuses pattern from rag_service) ───────────────────────────
+# ── LLM helper ────────────────────────────────────────────────────────────────
 
-def _call_gemini_json(prompt: str, temperature: float = 0.3) -> tuple[str, int, int, int]:
+def _call_llm_json(prompt: str, temperature: float = 0.3) -> tuple[str, int, int, int]:
+    """Thin wrapper: prepend system instructions and delegate to llm_service.
+    json_mode=True enables native JSON output mode (Gemini: response_mime_type),
+    eliminating markdown-fence parse failures.
     """
-    Call Gemini and return (raw_text, prompt_tokens, completion_tokens, total_tokens).
-    Uses lower temperature than chat for deterministic JSON output.
-    """
-    from google import genai
-    from google.genai import types as genai_types
-    from google.genai import errors as genai_errors
-
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not configured.")
-
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    delay = settings.GEMINI_RETRY_DELAY
-    last_exc: Exception | None = None
-
-    for attempt in range(1, settings.GEMINI_MAX_RETRIES + 1):
-        try:
-            response = client.models.generate_content(
-                model=settings.GEMINI_MODEL,
-                contents=_GENERATION_SYSTEM + "\n\n" + prompt,
-                config=genai_types.GenerateContentConfig(
-                    max_output_tokens=4096,
-                    temperature=temperature,
-                ),
-            )
-            text = response.text or ""
-            usage = getattr(response, "usage_metadata", None)
-            pt = getattr(usage, "prompt_token_count", 0) or 0
-            ct = getattr(usage, "candidates_token_count", 0) or 0
-            tt = getattr(usage, "total_token_count", 0) or (pt + ct)
-            logger.info(
-                "Gemini quiz call ok: attempt=%d tokens(p=%d c=%d t=%d)",
-                attempt, pt, ct, tt,
-            )
-            return text, pt, ct, tt
-        except genai_errors.ClientError as exc:
-            if getattr(exc, "status_code", None) == 429:
-                logger.warning("Gemini rate limit (attempt %d): %s", attempt, exc)
-                last_exc = exc
-            else:
-                raise RuntimeError(f"Gemini client error: {exc}") from exc
-        except Exception as exc:
-            logger.warning("Gemini error (attempt %d): %s", attempt, exc)
-            last_exc = exc
-
-        if attempt < settings.GEMINI_MAX_RETRIES:
-            time.sleep(delay)
-            delay *= 2
-
-    raise RuntimeError(
-        f"Gemini failed after {settings.GEMINI_MAX_RETRIES} attempts. Last: {last_exc}"
+    from app.services.llm_service import call_llm
+    return call_llm(
+        _GENERATION_SYSTEM + "\n\n" + prompt,
+        temperature=temperature,
+        max_tokens=4096,
+        json_mode=True,
     )
 
 
@@ -188,7 +146,7 @@ def _call_gemini_json(prompt: str, temperature: float = 0.3) -> tuple[str, int, 
 
 def _extract_json(text: str) -> dict:
     """
-    Extract JSON from Gemini response, stripping markdown code fences if present.
+    Extract JSON from Mistral response, stripping markdown code fences if present.
     """
     # Strip markdown fences
     text = text.strip()
@@ -256,7 +214,7 @@ def _recheck_answers(
     context: str,
 ) -> list[dict]:
     """
-    Ask Gemini to verify each answer is correct.
+    Ask Mistral to verify each answer is correct.
     Returns only the questions that pass validation.
     """
     if not questions:
@@ -273,7 +231,7 @@ def _recheck_answers(
     )
 
     try:
-        raw, pt, ct, tt = _call_gemini_json(prompt, temperature=0.1)
+        raw, pt, ct, tt = _call_llm_json(prompt, temperature=0.1)
         data = _extract_json(raw)
         results = data.get("results", [])
         valid_indices = {r["index"] for r in results if r.get("valid") is True}
@@ -324,7 +282,7 @@ def _compute_correction(
 
     for sa in student_answers:
         if sa.question_id in auto_correctable:
-            submitted = (sa.answer_text or "").strip().lower()
+            submitted = (sa.answer_text or "").strip().casefold()
             sa.is_correct = submitted == correct_text[sa.question_id]
             if sa.is_correct:
                 earned_points += question_points.get(sa.question_id, 1)
@@ -415,12 +373,12 @@ def generate_quiz_task(
     db_url: str,
 ) -> dict:
     """
-    Celery task: generate a quiz from a document using Gemini.
+    Celery task: generate a quiz from a document using Mistral.
 
     Steps:
       1. Load document chunks from Postgres
       2. Get top concepts from Postgres
-      3. Generate questions via Gemini
+      3. Generate questions via Mistral
       4. Parse + structurally validate
       5. LLM re-check answers
       6. Deduplicate
@@ -503,7 +461,7 @@ def generate_quiz_task(
 
         concepts_str = ", ".join(c.term for c in concept_rows) if concept_rows else "N/A"
 
-        # ── Step 4: Build prompt and call Gemini ──────────────────────────────
+        # ── Step 4: Build prompt and call Mistral ──────────────────────────────
         # Ask for more questions than needed to allow for filtering
         target = min(num_questions + max(5, num_questions // 3), 50)
 
@@ -515,7 +473,7 @@ def generate_quiz_task(
             difficulty_instructions=_DIFFICULTY_INSTRUCTIONS[difficulty],
         )
 
-        raw_text, prompt_tokens, completion_tokens, total_tokens = _call_gemini_json(
+        raw_text, prompt_tokens, completion_tokens, total_tokens = _call_llm_json(
             prompt, temperature=0.4
         )
 
@@ -524,9 +482,9 @@ def generate_quiz_task(
             data = _extract_json(raw_text)
             raw_questions: list[dict[str, Any]] = data.get("questions", [])
         except (json.JSONDecodeError, KeyError) as exc:
-            raise ValueError(f"Gemini returned invalid JSON: {exc}") from exc
+            raise ValueError(f"Mistral returned invalid JSON: {exc}") from exc
 
-        logger.info("[Quiz] Gemini returned %d raw questions", len(raw_questions))
+        logger.info("[Quiz] Mistral returned %d raw questions", len(raw_questions))
 
         # ── Step 6: Structural validation ─────────────────────────────────────
         valid_questions = [q for q in raw_questions if _validate_question(q)]
@@ -673,7 +631,7 @@ def correct_quiz_attempt_task(self, attempt_id: int, db_url: str) -> dict:
                     )
                 )
                 if correct_ans:
-                    correct_text[q.id] = correct_ans.text.strip().lower()
+                    correct_text[q.id] = correct_ans.text.strip().casefold()
                     question_points[q.id] = q.points
 
         logger.info(

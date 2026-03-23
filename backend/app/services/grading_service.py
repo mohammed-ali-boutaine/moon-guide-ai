@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import re
-import time
 import uuid
 from typing import Any
 
@@ -93,60 +92,12 @@ def compute_similarity(reference: str, hypothesis: str) -> dict[str, float]:
     }
 
 
-# ── Gemini helper ─────────────────────────────────────────────────────────────
+# ── LLM helper ────────────────────────────────────────────────────────────────
 
-def _call_gemini_json(prompt: str, temperature: float = 0.2) -> tuple[str, int, int, int]:
-    """
-    Call Gemini and return (raw_text, prompt_tokens, completion_tokens, total_tokens).
-    """
-    from google import genai
-    from google.genai import types as genai_types
-    from google.genai import errors as genai_errors
-
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not configured.")
-
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    delay = settings.GEMINI_RETRY_DELAY
-    last_exc: Exception | None = None
-
-    for attempt_num in range(1, settings.GEMINI_MAX_RETRIES + 1):
-        try:
-            response = client.models.generate_content(
-                model=settings.GEMINI_MODEL,
-                contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    max_output_tokens=2048,
-                    temperature=temperature,
-                ),
-            )
-            text = response.text or ""
-            usage = getattr(response, "usage_metadata", None)
-            pt = getattr(usage, "prompt_token_count", 0) or 0
-            ct = getattr(usage, "candidates_token_count", 0) or 0
-            tt = getattr(usage, "total_token_count", 0) or (pt + ct)
-            logger.info(
-                "[Grading] Gemini call ok: attempt=%d tokens(p=%d c=%d t=%d)",
-                attempt_num, pt, ct, tt,
-            )
-            return text, pt, ct, tt
-        except genai_errors.ClientError as exc:
-            if getattr(exc, "status_code", None) == 429:
-                logger.warning("[Grading] Rate limit (attempt %d): %s", attempt_num, exc)
-                last_exc = exc
-            else:
-                raise RuntimeError(f"Gemini client error: {exc}") from exc
-        except Exception as exc:
-            logger.warning("[Grading] Gemini error (attempt %d): %s", attempt_num, exc)
-            last_exc = exc
-
-        if attempt_num < settings.GEMINI_MAX_RETRIES:
-            time.sleep(delay)
-            delay *= 2
-
-    raise RuntimeError(
-        f"Gemini failed after {settings.GEMINI_MAX_RETRIES} attempts. Last: {last_exc}"
-    )
+def _call_llm_json(prompt: str, temperature: float = 0.2) -> tuple[str, int, int, int]:
+    """Delegate to llm_service, which dispatches based on LLM_PROVIDER."""
+    from app.services.llm_service import call_llm
+    return call_llm(prompt, temperature=temperature, max_tokens=2048)
 
 
 def _extract_json(text: str) -> dict:
@@ -371,7 +322,7 @@ def grade_short_answers_task(self, attempt_id: int, db_url: str) -> dict:
                         bleu_score=0.0,
                         rouge_l_score=0.0,
                         needs_review=False,
-                        model_used=settings.GEMINI_MODEL,
+                        model_used=settings.MISTRAL_CHAT_MODEL if settings.LLM_PROVIDER == "mistral" else settings.GEMINI_MODEL,
                         prompt_tokens=0,
                         completion_tokens=0,
                         total_tokens=0,
@@ -395,12 +346,13 @@ def grade_short_answers_task(self, attempt_id: int, db_url: str) -> dict:
             )
 
             try:
-                raw, pt, ct, tt = _call_gemini_json(prompt, temperature=0.1)
+                raw, pt, ct, tt = _call_llm_json(prompt, temperature=0.1)
                 total_tokens_used += tt
                 data = _extract_json(raw)
                 llm_score = float(max(0, min(100, data.get("score", 0))))
                 llm_reasoning = str(data.get("reasoning", "No reasoning provided."))
-                needs_review = bool(data.get("needs_review", llm_score < _REVIEW_THRESHOLD))
+                raw_review = data.get("needs_review")
+                needs_review = raw_review if raw_review is not None else (llm_score < _REVIEW_THRESHOLD)
             except Exception as exc:
                 logger.warning(
                     "[GradeShort] Gemini grading failed for question=%d: %s — using similarity",
@@ -450,7 +402,7 @@ def grade_short_answers_task(self, attempt_id: int, db_url: str) -> dict:
                         bleu_score=bleu,
                         rouge_l_score=rouge_l,
                         needs_review=needs_review,
-                        model_used=settings.GEMINI_MODEL,
+                        model_used=settings.MISTRAL_CHAT_MODEL if settings.LLM_PROVIDER == "mistral" else settings.GEMINI_MODEL,
                         prompt_tokens=pt,
                         completion_tokens=ct,
                         total_tokens=tt,
@@ -648,7 +600,7 @@ def generate_feedback_task(self, attempt_id: int, db_url: str) -> dict:
         )
 
         # ── Call Gemini ────────────────────────────────────────────────────────
-        raw, pt, ct, tt = _call_gemini_json(prompt, temperature=0.4)
+        raw, pt, ct, tt = _call_llm_json(prompt, temperature=0.4)
         data = _extract_json(raw)
         feedbacks: list[dict] = data.get("feedbacks", [])
 

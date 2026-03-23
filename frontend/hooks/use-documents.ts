@@ -48,6 +48,10 @@ async function uploadClassDocument(
   const formData = new FormData();
   formData.append('file', file);
 
+  // Use local API proxy route instead of direct backend call
+  // This ensures same-origin requests so cookies are sent properly
+  const uploadUrl = `/api/upload/class/${classId}`;
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
 
@@ -60,13 +64,19 @@ async function uploadClassDocument(
 
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(JSON.parse(xhr.responseText));
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          reject(new Error('Invalid response from server'));
+        }
+      } else if (xhr.status === 401) {
+        reject(new Error('Authentication failed. Please log in again.'));
       } else {
         try {
           const error = JSON.parse(xhr.responseText);
-          reject(new Error(error.detail || 'Upload failed'));
+          reject(new Error(error.detail || `Upload failed (${xhr.status})`));
         } catch {
-          reject(new Error('Upload failed'));
+          reject(new Error(`Upload failed (${xhr.status})`));
         }
       }
     });
@@ -75,8 +85,13 @@ async function uploadClassDocument(
       reject(new Error('Network error during upload'));
     });
 
-    xhr.open('POST', `${API_URL}/api/classes/${classId}/documents`);
-    xhr.withCredentials = true;
+    xhr.addEventListener('abort', () => {
+      reject(new Error('Upload cancelled'));
+    });
+
+    xhr.open('POST', uploadUrl);
+    xhr.setRequestHeader('Accept', 'application/json');
+    // Note: Don't set Content-Type - let browser set it with boundary for FormData
     xhr.send(formData);
   });
 }
@@ -89,6 +104,10 @@ async function uploadPersonalDocument(
   const formData = new FormData();
   formData.append('file', file);
 
+  // Use local API proxy route instead of direct backend call
+  // This ensures same-origin requests so cookies are sent properly
+  const uploadUrl = '/api/upload/personal';
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
 
@@ -101,13 +120,19 @@ async function uploadPersonalDocument(
 
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(JSON.parse(xhr.responseText));
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          reject(new Error('Invalid response from server'));
+        }
+      } else if (xhr.status === 401) {
+        reject(new Error('Authentication failed. Please log in again.'));
       } else {
         try {
           const error = JSON.parse(xhr.responseText);
-          reject(new Error(error.detail || 'Upload failed'));
+          reject(new Error(error.detail || `Upload failed (${xhr.status})`));
         } catch {
-          reject(new Error('Upload failed'));
+          reject(new Error(`Upload failed (${xhr.status})`));
         }
       }
     });
@@ -116,8 +141,13 @@ async function uploadPersonalDocument(
       reject(new Error('Network error during upload'));
     });
 
-    xhr.open('POST', `${API_URL}/api/documents/personal`);
-    xhr.withCredentials = true;
+    xhr.addEventListener('abort', () => {
+      reject(new Error('Upload cancelled'));
+    });
+
+    xhr.open('POST', uploadUrl);
+    xhr.setRequestHeader('Accept', 'application/json');
+    // Note: Don't set Content-Type - let browser set it with boundary for FormData
     xhr.send(formData);
   });
 }

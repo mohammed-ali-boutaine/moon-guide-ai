@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     
     # Cookie settings
     COOKIE_SECURE: bool = False  # True in production (HTTPS only)
-    COOKIE_SAMESITE: str = "lax"  # lax | strict | none
+    COOKIE_SAMESITE: str = "lax"  # lax in dev/prod, none requires HTTPS
     COOKIE_HTTPONLY: bool = True
     ACCESS_TOKEN_COOKIE_NAME: str = "access_token"
     REFRESH_TOKEN_COOKIE_NAME: str = "refresh_token"
@@ -56,6 +56,16 @@ class Settings(BaseSettings):
     MISTRAL_EMBEDDING_BATCH_SIZE: int = 32  # Max texts per API call
     MISTRAL_RATE_LIMIT_RPM: int = 300  # Requests per minute
 
+    # Mistral Chat / Generation (cloud)
+    MISTRAL_CHAT_MODEL: str = "mistral-small-latest"
+
+    # Ollama (local LLM)
+    # host.docker.internal reaches the host machine from inside Docker containers.
+    # Override to http://localhost:11434 in .env if running outside Docker.
+    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
+    OLLAMA_MODEL: str = "mistral:latest"
+    OLLAMA_FALLBACK_ENABLED: bool = True  # fall back to Ollama when cloud providers are exhausted
+
     # Embedding Caching
     EMBEDDING_CACHE_ENABLED: bool = True
     EMBEDDING_CACHE_TTL: int = 86400  # 24 hours in seconds
@@ -84,13 +94,18 @@ class Settings(BaseSettings):
     # Backend_URL
     BACKEND_URL: str = "http://localhost:8000"
 
+    # LLM Provider for generation (chat, quiz, grading)
+    LLM_PROVIDER: str = "ollama"  # "gemini" | "mistral" | "ollama"
+
     # Gemini LLM
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-1.5-flash"
-    GEMINI_MAX_OUTPUT_TOKENS: int = 1024
-    GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_MODEL: str = "gemini-2.0-flash"
     GEMINI_MAX_RETRIES: int = 3
-    GEMINI_RETRY_DELAY: float = 2.0  # seconds between retries
+
+    # Shared LLM settings (apply to whichever provider is active)
+    LLM_MAX_OUTPUT_TOKENS: int = 4096   # raised from 1024 — quiz generation needs 4096
+    LLM_TEMPERATURE: float = 0.7
+    LLM_RETRY_DELAY: float = 2.0        # seconds between retries (exponential backoff)
 
     # RAG settings
     RAG_TOP_K: int = 5                   # chunks to retrieve

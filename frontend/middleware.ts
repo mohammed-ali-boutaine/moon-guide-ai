@@ -64,7 +64,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Proxy /api/ requests to the backend (keep existing behaviour)
+  // Skip /api/upload/ - these are handled by custom route handlers
+  if (pathname.startsWith('/api/upload/')) {
+    return NextResponse.next();
+  }
+
+  // Proxy other /api/ requests to the backend (keep existing behaviour)
   if (pathname.startsWith('/api/')) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const url = request.nextUrl.clone();

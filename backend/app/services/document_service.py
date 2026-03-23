@@ -238,12 +238,9 @@ def _extract_text_from_file(file_path: str, file_type: str) -> str:
     Returns:
         Extracted text string.
     """
-    # Handle both absolute and relative paths correctly
-    if os.path.isabs(file_path):
-        abs_path = file_path
-    else:
-        # For relative paths, ensure we don't accidentally strip needed prefixes
-        abs_path = os.path.abspath(file_path)
+    # file_path may be a URL path like /static/uploads/... (stored in DB relative to WORKDIR).
+    # Strip the leading "/" so os.path.abspath resolves it from CWD (/app in Docker).
+    abs_path = os.path.abspath(file_path.lstrip("/"))
     
     logger.info("Extracting text from %s (type=%s)", abs_path, file_type)
 

@@ -511,6 +511,74 @@ class ClassService:
         return list(classes), total
 
     @staticmethod
+    def is_teacher_of_document(db: Session, document_id: int, teacher_id: UUID) -> bool:
+        """
+        Check if a teacher has permission to manage (approve/reject) a document.
+        Teacher must own the class that the document belongs to.
+
+        Args:
+            db: Database session
+            document_id: Document ID
+            teacher_id: Teacher ID to verify
+
+        Returns:
+            True if teacher can manage the document, False otherwise
+        """
+        from app.models.document import Document
+
+        document = db.execute(
+            select(Document).where(Document.id == document_id)
+        ).scalar_one_or_none()
+
+        if not document:
+            return False
+
+        # If document belongs to a class, check if teacher owns that class
+        if document.class_id:
+            return ClassService.is_teacher_of_class(db, document.class_id, teacher_id)
+
+        # Personal documents can only be managed by the uploader
+        return document.uploaded_by_id == teacher_id
+
+    @staticmethod
+    def is_teacher_of_class(db: Session, class_id: UUID, teacher_id: UUID) -> bool:
+        """
+        Check if a user is the teacher of a specific class
+
+        Args:
+            db: Database session
+            class_id: Class ID
+            teacher_id: Teacher ID to verify
+
+        Returns:
+            True if teacher owns the class, False otherwise
+        """
+        query = select(Class).where(Class.id == class_id, Class.teacher_id == teacher_id)
+        class_obj = db.execute(query).scalar_one_or_none()
+        return class_obj is not None
+
+    @staticmethod
+    def is_student_in_class(db: Session, class_id: UUID, student_id: UUID) -> bool:
+        """
+        Check if a student is enrolled in a specific class
+
+        Args:
+            db: Database session
+            class_id: Class ID
+            student_id: Student ID to verify
+
+        Returns:
+            True if student is enrolled, False otherwise
+        """
+        class_student = db.execute(
+            select(ClassStudent).where(
+                ClassStudent.class_id == class_id,
+                ClassStudent.student_id == student_id,
+            )
+        ).scalar_one_or_none()
+        return class_student is not None
+
+    @staticmethod
     def get_student_joined_date(db: Session, class_id: UUID, student_id: UUID):
         """
         Get the date when a student joined a class

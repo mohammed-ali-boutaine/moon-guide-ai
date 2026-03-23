@@ -40,9 +40,8 @@ def get_current_user(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated",
-                headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
         # Verify JWT token
         payload = verify_token(token)
         if payload is None:
@@ -50,7 +49,6 @@ def get_current_user(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
             )
         
         # Get user ID from token
@@ -83,7 +81,6 @@ def get_current_user(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Session not found or has been revoked",
-                headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Fetch user from database

@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session as DBSession, selectinload
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, StudentUser, TeacherUser
+from app.models.role import RoleName
 from app.core.logging import logger
 from app.models.answer import Answer
 from app.models.class_ import Class
@@ -136,7 +137,7 @@ def generate_quiz(
     # ── Access control: owner or teacher ─────────────────────────────────────
     if str(doc.uploaded_by_id) != str(current_user.id):
         # Teacher can generate quizzes for class documents they have access to
-        if not (current_user.role and current_user.role.name.value == "teacher"):
+        if not (current_user.role and current_user.role.name == RoleName.TEACHER):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have access to this document.",
@@ -253,7 +254,7 @@ def get_quiz(
     )
     if job is None:
         # Teachers can also view quizzes for their class documents
-        is_teacher = current_user.role and current_user.role.name.value == "teacher"
+        is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
         if not is_teacher:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -439,7 +440,7 @@ def create_quiz(
     Create a quiz manually.  Only teachers can call this endpoint.
     All questions and answers are created in a single transaction.
     """
-    is_teacher = current_user.role and current_user.role.name.value == "teacher"
+    is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
     if not is_teacher:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -503,7 +504,7 @@ def update_quiz(
     Update quiz metadata (title, description, status, difficulty, duration, max_attempts).
     Only teachers can call this endpoint.
     """
-    is_teacher = current_user.role and current_user.role.name.value == "teacher"
+    is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
     if not is_teacher:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -563,8 +564,8 @@ def list_assigned_quizzes(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found.")
 
     # Access control
-    is_teacher = current_user.role and current_user.role.name.value == "teacher"
-    is_student = current_user.role and current_user.role.name.value == "student"
+    is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
+    is_student = current_user.role and current_user.role.name == RoleName.STUDENT
 
     if is_teacher and str(cls.teacher_id) != str(current_user.id):
         raise HTTPException(
@@ -1024,7 +1025,7 @@ def generate_feedback(
 
     # Allow: attempt's own student, or teacher of the class
     is_own = str(attempt.student_id) == str(current_user.id)
-    is_teacher = current_user.role and current_user.role.name.value == "teacher"
+    is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
     if not (is_own or is_teacher):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
@@ -1176,7 +1177,7 @@ def get_attempt_results(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attempt not found.")
 
     is_own = str(attempt.student_id) == str(current_user.id)
-    is_teacher = current_user.role and current_user.role.name.value == "teacher"
+    is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
     if not (is_own or is_teacher):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 

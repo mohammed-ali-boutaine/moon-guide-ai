@@ -1,6 +1,6 @@
 """Add quiz_assignments and notifications tables
 
-Revision ID: 0010_add_quiz_assignments_notifications
+Revision ID: 0010_quiz_assign_notify
 Revises: 0009_add_quiz_generation
 Create Date: 2026-03-15 00:00:00.000000
 """
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "0010_add_quiz_assignments_notifications"
+revision: str = "0010_quiz_assign_notify"
 down_revision: Union[str, Sequence[str], None] = "0009_add_quiz_generation"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

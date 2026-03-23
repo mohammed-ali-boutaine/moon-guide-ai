@@ -12,7 +12,7 @@ alembic>=1.13.0
 
 # Cache & Vector DB
 redis==5.0.1
-qdrant-client==1.7.3
+qdrant-client>=1.12.0
 
 # Auth & Security
 python-jose[cryptography]==3.3.0
@@ -45,6 +45,7 @@ pyclamd>=0.4.0
 # LLM dependencies
 mistralai>=1.0.0
 google-genai>=1.0.0
+ollama>=0.3.0
 
 # NLP — concept extraction pipeline
 spacy>=3.7.0
