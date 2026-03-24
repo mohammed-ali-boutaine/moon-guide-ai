@@ -1,4 +1,5 @@
 from app.models.answer import Answer
+from app.models.flashcard import Flashcard, FlashcardProgress
 from app.models.question_feedback import QuestionFeedback
 from app.models.short_answer_grade import ShortAnswerGrade
 from app.models.chat_message import ChatMessage, ChatRole
@@ -24,6 +25,8 @@ from app.models.user_profile import UserProfile
 __all__ = [
     "Answer",
     "AssignmentStatus",
+    "Flashcard",
+    "FlashcardProgress",
     "AttemptStatus",
     "ChatMessage",
     "ChatRole",

@@ -25,8 +25,12 @@ function AssignModal({
 
   async function handleAssign() {
     if (!classId) return;
-    await assign.mutateAsync({ quizId: quiz.id, classId, dueDate: dueDate || undefined });
-    setDone(true);
+    try {
+      await assign.mutateAsync({ quizId: quiz.id, classId, dueDate: dueDate || undefined });
+      setDone(true);
+    } catch {
+      // error displayed via assign.isError below
+    }
   }
 
   return (
