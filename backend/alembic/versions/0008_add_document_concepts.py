@@ -9,6 +9,7 @@ Create Date: 2026-03-14 00:00:00.000000
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -32,7 +33,7 @@ def upgrade() -> None:
         sa.Column("score", sa.Float(), nullable=False, server_default="0.0"),
         sa.Column(
             "source",
-            sa.Enum("ner", "textrank", "tfidf", name="conceptsource"),
+            postgresql.ENUM("ner", "textrank", "tfidf", name="conceptsource", create_type=False),
             nullable=False,
         ),
         sa.Column("entity_type", sa.String(length=50), nullable=True),
@@ -53,7 +54,6 @@ def upgrade() -> None:
         ["document_id"],
         unique=False,
     )
-    # Index for quiz generation queries (filter by theme + score)
     op.create_index(
         "ix_document_concepts_document_theme",
         "document_concepts",

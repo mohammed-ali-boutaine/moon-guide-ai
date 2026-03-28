@@ -101,6 +101,7 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+    restart: on-failure
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

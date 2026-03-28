@@ -19,7 +19,7 @@ def upgrade() -> None:
     op.create_table(
         'user_activities',
         sa.Column('id', sa.Uuid(as_uuid=True), primary_key=True),
-        sa.Column('user_id', sa.Uuid(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
+        sa.Column('user_id', sa.Uuid(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
         sa.Column('action', sa.String(64), nullable=False),
         sa.Column('ip_address', sa.String(64), nullable=True),
         sa.Column('user_agent', sa.Text(), nullable=True),

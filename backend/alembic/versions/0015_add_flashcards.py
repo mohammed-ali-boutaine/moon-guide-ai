@@ -8,6 +8,7 @@ Create Date: 2026-03-24 00:00:00.000000
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "0015_add_flashcards"
@@ -37,7 +38,7 @@ def upgrade() -> None:
     op.create_table(
         "flashcard_progress",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("flashcard_id", sa.Integer(), nullable=False),
         sa.Column("ease_factor", sa.Float(), nullable=False, server_default="2.5"),
         sa.Column("interval_days", sa.Integer(), nullable=False, server_default="1"),

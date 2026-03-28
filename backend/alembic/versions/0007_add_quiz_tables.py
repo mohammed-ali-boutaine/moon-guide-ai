@@ -37,7 +37,7 @@ def upgrade() -> None:
         sa.Column("max_attempts", sa.Integer(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("draft", "published", "archived", name="quizstatus"),
+            postgresql.ENUM("draft", "published", "archived", name="quizstatus", create_type=False),
             nullable=False,
             server_default="draft",
         ),
@@ -63,7 +63,7 @@ def upgrade() -> None:
         sa.Column("quiz_id", sa.Integer(), nullable=False),
         sa.Column(
             "type",
-            sa.Enum("MCQ", "TrueFalse", "ShortAnswer", name="questiontype"),
+            postgresql.ENUM("MCQ", "TrueFalse", "ShortAnswer", name="questiontype", create_type=False),
             nullable=False,
         ),
         sa.Column("text", sa.Text(), nullable=False),

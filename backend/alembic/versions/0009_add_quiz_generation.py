@@ -73,7 +73,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "status",
-            sa.Enum("pending", "processing", "completed", "failed", name="jobstatus"),
+            postgresql.ENUM("pending", "processing", "completed", "failed", name="jobstatus", create_type=False),
             nullable=False,
             server_default="pending",
         ),

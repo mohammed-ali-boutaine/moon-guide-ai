@@ -51,7 +51,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "status",
-            sa.Enum("active", "inactive", name="assignmentstatus"),
+            postgresql.ENUM("active", "inactive", name="assignmentstatus", create_type=False),
             nullable=False,
             server_default="active",
         ),

@@ -41,7 +41,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "status",
-            sa.Enum("started", "in_progress", "submitted", name="attemptstatus"),
+            postgresql.ENUM("started", "in_progress", "submitted", name="attemptstatus", create_type=False),
             nullable=False,
             server_default="started",
         ),
@@ -59,7 +59,6 @@ def upgrade() -> None:
     )
     op.create_index("ix_quiz_attempts_quiz_id", "quiz_attempts", ["quiz_id"])
     op.create_index("ix_quiz_attempts_student_id", "quiz_attempts", ["student_id"])
-    # Composite index for fast "fetch student's attempts on a quiz" queries
     op.create_index(
         "ix_quiz_attempts_quiz_student", "quiz_attempts", ["quiz_id", "student_id"]
     )
