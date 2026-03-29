@@ -41,7 +41,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    scope = Column(Enum(ScopeEnum), nullable=False)
+    scope = Column(Enum(ScopeEnum, values_callable=lambda x: [e.value for e in x]), nullable=False)
     class_id = Column(Uuid(as_uuid=True), ForeignKey("classes.id"), nullable=True)
     filename = Column(String(255), nullable=False)
     file_url = Column(String(512), nullable=False)

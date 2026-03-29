@@ -10,11 +10,14 @@ from sqlalchemy.orm import Session as DBSession
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser
 from app.core.logging import logger
+from app.core.rate_limit import RateLimiter
 from app.models.document import RoleEnum
 from app.schemas.document import DocumentUploadResponse, DocumentListResponse, DocumentResponse
 from app.services.document_service import upload_personal_document, list_personal_documents, soft_delete_document
 
 router = APIRouter(prefix="/documents", tags=["Personal Documents"])
+
+_rate_limit_upload = RateLimiter("doc_upload", max_requests=10, window_seconds=300)
 
 
 @router.post("/personal", response_model=DocumentUploadResponse, status_code=201)
@@ -23,6 +26,7 @@ async def create_personal_document(
     current_user: CurrentUser,
     db: Annotated[DBSession, Depends(get_db)],
     file: UploadFile = File(..., description="PDF, DOCX, TXT or MD file (max 50 MB)"),
+    _: Annotated[None, Depends(_rate_limit_upload)] = None,
 ):
     """Upload a personal document. Stored locally and parsed in the background."""
     logger.info("Personal document upload by user=%s", current_user.email)

@@ -180,7 +180,15 @@ def _get_st_model():
         logger.info("Loading Sentence Transformers model: %s", settings.EMBEDDING_MODEL)
         from sentence_transformers import SentenceTransformer
 
-        _st_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        # Use auth token if available to avoid rate-limiting/warnings
+        use_auth_token = settings.HUGGING_FACE_TOKEN or None
+        if use_auth_token:
+            logger.info("Using Hugging Face token for model download.")
+
+        _st_model = SentenceTransformer(
+            settings.EMBEDDING_MODEL,
+            use_auth_token=use_auth_token
+        )
         logger.info(
             "Sentence Transformers model loaded (dim=%d)",
             _st_model.get_sentence_embedding_dimension(),

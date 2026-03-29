@@ -134,6 +134,136 @@ class AdminService:
         }
 
     @staticmethod
+    def get_platform_analytics(db: DBSession) -> dict:
+        """Return platform-wide quiz and learning analytics."""
+        from sqlalchemy import case, select, func as sqlfunc
+        from app.models.quiz import Quiz
+        from app.models.quiz_attempt import QuizAttempt, AttemptStatus
+
+        total_quizzes = db.scalar(select(sqlfunc.count()).select_from(Quiz)) or 0
+
+        stats = db.execute(
+            select(
+                sqlfunc.count(QuizAttempt.id).label("total_attempts"),
+                sqlfunc.avg(QuizAttempt.score).label("avg_score"),
+                sqlfunc.sum(
+                    case((QuizAttempt.score >= 90, 1), else_=0)
+                ).label("excellent"),
+                sqlfunc.sum(
+                    case(((QuizAttempt.score >= 75) & (QuizAttempt.score < 90), 1), else_=0)
+                ).label("good"),
+                sqlfunc.sum(
+                    case(((QuizAttempt.score >= 50) & (QuizAttempt.score < 75), 1), else_=0)
+                ).label("average"),
+                sqlfunc.sum(
+                    case((QuizAttempt.score < 50, 1), else_=0)
+                ).label("below_average"),
+            ).where(
+                QuizAttempt.status == AttemptStatus.submitted,
+                QuizAttempt.score.is_not(None),
+            )
+        ).first()
+
+        return {
+            "total_quizzes": total_quizzes,
+            "total_attempts": stats.total_attempts or 0,
+            "avg_score": round(float(stats.avg_score), 1) if stats.avg_score is not None else None,
+            "score_distribution": {
+                "excellent": int(stats.excellent or 0),
+                "good": int(stats.good or 0),
+                "average": int(stats.average or 0),
+                "below_average": int(stats.below_average or 0),
+            },
+        }
+
+    @staticmethod
+    def list_all_classes(
+        db: DBSession,
+        page: int,
+        page_size: int,
+        search: str | None,
+    ) -> dict:
+        """Return a paginated list of all classes."""
+        q = db.query(Class)
+        if search:
+            q = q.filter(Class.name.ilike(f"%{search}%"))
+        total = q.count()
+        classes = (
+            q.order_by(Class.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        items = []
+        for c in classes:
+            items.append({
+                "id": str(c.id),
+                "name": c.name,
+                "description": c.description,
+                "teacher_id": str(c.teacher_id),
+                "teacher_name": (
+                    f"{c.teacher.profile.first_name} {c.teacher.profile.last_name}"
+                    if c.teacher and c.teacher.profile else ""
+                ),
+                "teacher_email": c.teacher.email if c.teacher else "",
+                "student_count": len(c.class_students),
+                "created_at": c.created_at.isoformat(),
+            })
+        return {"total": total, "page": page, "page_size": page_size, "items": items}
+
+    @staticmethod
+    def delete_class(db: DBSession, class_id: str) -> None:
+        """Delete a class by id (admin override)."""
+        try:
+            cid = _uuid.UUID(class_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid class id")
+        cls = db.query(Class).filter(Class.id == cid).first()
+        if not cls:
+            raise HTTPException(status_code=404, detail="Class not found")
+        db.delete(cls)
+        db.commit()
+
+    @staticmethod
+    def list_all_documents(
+        db: DBSession,
+        page: int,
+        page_size: int,
+        status_filter: str | None,
+    ) -> dict:
+        """Return a paginated list of all documents."""
+        from app.models.document import Document, StatusEnum
+        q = db.query(Document).filter(Document.deleted_at.is_(None))
+        if status_filter:
+            try:
+                q = q.filter(Document.status == StatusEnum(status_filter))
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
+        total = q.count()
+        docs = (
+            q.order_by(Document.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        items = []
+        for d in docs:
+            uploader = db.query(User).filter(User.id == d.uploaded_by_id).first()
+            items.append({
+                "id": d.id,
+                "filename": d.filename,
+                "file_type": d.file_type.value if d.file_type else None,
+                "status": d.status.value if d.status else None,
+                "scope": d.scope.value if d.scope else None,
+                "class_id": str(d.class_id) if d.class_id else None,
+                "uploaded_by_role": d.uploaded_by_role.value if d.uploaded_by_role else None,
+                "uploader_email": uploader.email if uploader else None,
+                "file_size_bytes": d.file_size_bytes,
+                "created_at": d.created_at.isoformat(),
+            })
+        return {"total": total, "page": page, "page_size": page_size, "items": items}
+
+    @staticmethod
     def export_users_csv(db: DBSession) -> StreamingResponse:
         """Stream all users as a CSV file."""
         users = db.query(User).order_by(User.created_at.desc()).all()

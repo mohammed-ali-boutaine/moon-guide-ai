@@ -13,6 +13,11 @@ ADMIN_PASSWORD = "password"
 ADMIN_FIRST_NAME = "Moon"
 ADMIN_LAST_NAME = "Admin"
 
+TEACHER_EMAIL = "teacher@moon.com"
+TEACHER_PASSWORD = "password"
+TEACHER_FIRST_NAME = "Moon"
+TEACHER_LAST_NAME = "Teacher"
+
 
 def init_roles(db: Session) -> None:
     """Initialize default roles in database"""
@@ -71,6 +76,37 @@ def seed_admin(db: Session) -> None:
     logger.info(f"[OK] Default admin seeded: {ADMIN_EMAIL}")
 
 
+def seed_teacher(db: Session) -> None:
+    """Seed default teacher user if not present"""
+    existing = db.query(User).filter(User.email == TEACHER_EMAIL).first()
+    if existing:
+        logger.info(f"Teacher user already exists: {TEACHER_EMAIL}")
+        return
+
+    teacher_role = db.query(Role).filter(Role.name == RoleName.TEACHER).first()
+    if not teacher_role:
+        logger.error("TEACHER role not found — cannot seed teacher user")
+        return
+
+    teacher_user = User(
+        email=TEACHER_EMAIL,
+        password_hash=hash_password(TEACHER_PASSWORD),
+        role_id=teacher_role.id,
+        is_active=True,
+    )
+    db.add(teacher_user)
+    db.flush()
+
+    profile = UserProfile(
+        user_id=teacher_user.id,
+        first_name=TEACHER_FIRST_NAME,
+        last_name=TEACHER_LAST_NAME,
+    )
+    db.add(profile)
+    db.commit()
+    logger.info(f"[OK] Default teacher seeded: {TEACHER_EMAIL}")
+
+
 def init_db() -> None:
     """Initialize database with tables and default data"""
     logger.info("Starting database initialization...")
@@ -83,6 +119,7 @@ def init_db() -> None:
     try:
         init_roles(db)
         seed_admin(db)
+        seed_teacher(db)
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
         db.rollback()

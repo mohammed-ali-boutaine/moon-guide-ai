@@ -1,9 +1,33 @@
 'use client';
 
+import { useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useTeacherQuizzes } from '@/hooks/use-quiz';
 import { useClassContext } from '@/contexts/class-context';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const FETCH_OPTS: RequestInit = { credentials: 'include' };
+
+interface StrugglingStudent {
+  student_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  class_id: string;
+  class_name: string;
+  avg_score: number;
+  attempt_count: number;
+}
+
+async function fetchStrugglingStudents(threshold: number, classId?: string): Promise<{ items: StrugglingStudent[]; total: number; threshold: number }> {
+  const params = new URLSearchParams({ threshold: String(threshold) });
+  if (classId) params.set('class_id', classId);
+  const res = await fetch(`${API_URL}/api/quiz/struggling-students?${params}`, FETCH_OPTS);
+  if (!res.ok) throw new Error('Failed to fetch struggling students');
+  return res.json();
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -22,8 +46,17 @@ function ScoreBar({ value, color = 'bg-primary-500' }: { value: number; color?: 
 
 export default function TeacherAnalyticsPage() {
   const { classes } = useClassContext();
+  const [threshold, setThreshold] = useState(50);
+  const [alertClassId, setAlertClassId] = useState<string>('');
+
   // Fetch all quizzes across all classes
   const { data: quizData, isLoading } = useTeacherQuizzes(undefined);
+
+  const { data: strugglingData, isLoading: strugglingLoading } = useQuery({
+    queryKey: ['struggling-students', threshold, alertClassId || undefined],
+    queryFn: () => fetchStrugglingStudents(threshold, alertClassId || undefined),
+    staleTime: 30_000,
+  });
 
   const quizzes = quizData?.items ?? [];
 
@@ -297,6 +330,98 @@ export default function TeacherAnalyticsPage() {
               </div>
             </div>
           )}
+
+          {/* Struggling Students */}
+          <div className="mt-6 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gray-100">Struggling Students</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Students whose average score is below the threshold</p>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <select
+                  value={alertClassId}
+                  onChange={(e) => setAlertClassId(e.target.value)}
+                  className="px-2 py-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded-lg focus:outline-none"
+                >
+                  <option value="">All classes</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Threshold</span>
+                  <select
+                    value={threshold}
+                    onChange={(e) => setThreshold(Number(e.target.value))}
+                    className="px-2 py-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded-lg focus:outline-none"
+                  >
+                    {[30, 40, 50, 60, 70].map((t) => (
+                      <option key={t} value={t}>{t}%</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {strugglingLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
+              </div>
+            ) : !strugglingData || strugglingData.items.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-green-400 text-sm font-medium">No struggling students</p>
+                <p className="text-gray-500 text-xs mt-1">All students are above the {threshold}% threshold</p>
+              </div>
+            ) : (
+              <>
+                <div className="px-6 py-3 bg-red-950/20 border-b border-red-900/30 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span className="text-xs text-red-400 font-medium">{strugglingData.total} student{strugglingData.total !== 1 ? 's' : ''} need attention (avg score &lt; {threshold}%)</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Student</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Class</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Attempts</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider min-w-36">Avg Score</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800">
+                      {strugglingData.items.map((s) => {
+                        const name = [s.first_name, s.last_name].filter(Boolean).join(' ') || s.email;
+                        const severity = s.avg_score < 30 ? 'text-red-400' : 'text-orange-400';
+                        return (
+                          <tr key={`${s.student_id}-${s.class_id}`} className="hover:bg-gray-800/30 transition-colors">
+                            <td className="px-6 py-4">
+                              <Link href={`/dashboard/teacher/students/${s.student_id}`} className="text-sm font-medium text-gray-100 hover:text-primary-400 transition-colors">
+                                {name}
+                              </Link>
+                              <p className="text-xs text-gray-500">{s.email}</p>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-400">{s.class_name}</td>
+                            <td className="px-6 py-4 text-sm text-gray-300">{s.attempt_count}</td>
+                            <td className="px-6 py-4 min-w-36">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-gray-800 rounded-full">
+                                  <div className="h-1.5 rounded-full bg-red-500" style={{ width: `${s.avg_score}%` }} />
+                                </div>
+                                <span className={`text-sm font-semibold w-12 text-right ${severity}`}>{s.avg_score}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="mt-6 text-center">
             <Link href="/dashboard/teacher" className="text-sm text-gray-500 hover:text-gray-300 transition-colors">

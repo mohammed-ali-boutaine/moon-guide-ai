@@ -94,6 +94,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/__pycache__
+      - ./career_orientation:/career_orientation
     depends_on:
       postgres:
         condition: service_healthy
@@ -124,6 +125,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/__pycache__
+      - ./career_orientation:/career_orientation
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,6 +149,7 @@ services:
 
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - BACKEND_URL=http://backend:8000
       - NODE_ENV=development
       - DOCKER_ENV=true
       - WATCHPACK_POLLING=true

@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str = ""
     QDRANT_COLLECTION_PREFIX: str = "moonguide"
+
+    # Hugging Face
+    HUGGING_FACE_TOKEN: str = ""
     
     # Embedding
     EMBEDDING_PROVIDER: str = "gemini"  # "gemini" | "sentence-transformers" | "mistral"

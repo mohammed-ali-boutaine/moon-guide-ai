@@ -24,6 +24,7 @@ from app.schemas.document import (
     SearchResult,
     SearchResultDocumentInfo,
 )
+from app.core.rate_limit import RateLimiter
 from app.services.qdrant_service import (
     _collection_name,
     get_collection_info,
@@ -32,6 +33,8 @@ from app.services.qdrant_service import (
 from app.services.vector_service import semantic_search
 
 router = APIRouter(prefix="/search", tags=["Semantic Search"])
+
+_rate_limit_search = RateLimiter("search", max_requests=20, window_seconds=60)
 
 
 def _expand_query(query: str) -> str:
@@ -73,6 +76,7 @@ async def search_documents(
     body: SearchRequest,
     current_user: CurrentUser,
     db: Annotated[DBSession, Depends(get_db)],
+    _: Annotated[None, Depends(_rate_limit_search)],
 ) -> SearchResponse:
     """
     Perform semantic search across documents with query expansion, pagination, and logging.
@@ -189,6 +193,7 @@ async def search_class_documents(
     body: SemanticSearchRequest,
     current_user: CurrentUser,
     db: Annotated[DBSession, Depends(get_db)],
+    _: Annotated[None, Depends(_rate_limit_search)],
 ) -> SemanticSearchResponse:
     """
     Search for relevant document chunks within a class using semantic similarity.
@@ -234,6 +239,7 @@ async def search_single_document(
     body: SemanticSearchRequest,
     current_user: CurrentUser,
     db: Annotated[DBSession, Depends(get_db)],
+    _: Annotated[None, Depends(_rate_limit_search)],
 ) -> SemanticSearchResponse:
     """
     Search for relevant chunks within a single document.

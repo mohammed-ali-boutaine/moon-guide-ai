@@ -24,9 +24,10 @@ const FETCH_OPTS: RequestInit = {
 // ── API functions ─────────────────────────────────────────────────────────────
 
 async function generateQuiz(body: QuizGenerateRequest): Promise<QuizJobResponse> {
-  const res = await fetch(`${API_URL}/api/quiz/generate`, {
+  const res = await fetch('/api/quiz/generate', {
     method: 'POST',
-    ...FETCH_OPTS,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -37,7 +38,7 @@ async function generateQuiz(body: QuizGenerateRequest): Promise<QuizJobResponse>
 }
 
 async function pollQuizJob(jobId: string): Promise<QuizJobDetailResponse> {
-  const res = await fetch(`${API_URL}/api/quiz/jobs/${jobId}`, FETCH_OPTS);
+  const res = await fetch(`/api/quiz/jobs/${jobId}`, { credentials: 'include' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to fetch job status');
@@ -46,7 +47,7 @@ async function pollQuizJob(jobId: string): Promise<QuizJobDetailResponse> {
 }
 
 async function fetchQuiz(quizId: number): Promise<QuizResponse> {
-  const res = await fetch(`${API_URL}/api/quiz/${quizId}`, FETCH_OPTS);
+  const res = await fetch(`/api/quiz/${quizId}`, { credentials: 'include' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to fetch quiz');
@@ -55,9 +56,11 @@ async function fetchQuiz(quizId: number): Promise<QuizResponse> {
 }
 
 async function createQuiz(body: QuizCreateRequest): Promise<QuizResponse> {
-  const res = await fetch(`${API_URL}/api/quiz`, {
+  // Use Next.js proxy to avoid cross-origin CORS issues and ensure cookie forwarding
+  const res = await fetch('/api/quiz', {
     method: 'POST',
-    ...FETCH_OPTS,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -68,9 +71,11 @@ async function createQuiz(body: QuizCreateRequest): Promise<QuizResponse> {
 }
 
 async function updateQuiz(quizId: number, body: QuizUpdateRequest): Promise<QuizResponse> {
-  const res = await fetch(`${API_URL}/api/quiz/${quizId}`, {
+  // Use Next.js proxy to avoid cross-origin CORS issues and ensure cookie forwarding
+  const res = await fetch(`/api/quiz/${quizId}`, {
     method: 'PATCH',
-    ...FETCH_OPTS,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -134,7 +139,7 @@ async function fetchTeacherQuizzes(classId?: string): Promise<TeacherQuizListRes
   const params = new URLSearchParams();
   if (classId) params.set('class_id', classId);
   const qs = params.toString();
-  const res = await fetch(`${API_URL}/api/quiz${qs ? `?${qs}` : ''}`, FETCH_OPTS);
+  const res = await fetch(`/api/quiz${qs ? `?${qs}` : ''}`, { credentials: 'include' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to fetch quizzes');
@@ -153,7 +158,7 @@ export function useTeacherQuizzes(classId?: string) {
 // ── Quiz attempts list (teacher) ──────────────────────────────────────────────
 
 async function fetchQuizAttempts(quizId: number): Promise<QuizAttemptsListResponse> {
-  const res = await fetch(`${API_URL}/api/quiz/${quizId}/attempts`, FETCH_OPTS);
+  const res = await fetch(`/api/quiz/${quizId}/attempts`, { credentials: 'include' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to fetch attempts');

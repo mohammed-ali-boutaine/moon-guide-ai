@@ -7,11 +7,13 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    
     // BACKEND_URL env var for flexibility: Docker uses 'http://backend:8000',
-    // local dev without Docker should set BACKEND_URL=http://localhost:8000
-    const backendUrl = process.env.BACKEND_URL || 'http://backend:8000';
+    // local dev without Docker falls back to 'http://localhost:8000'
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+
+    // Forward the raw body bytes and original Content-Type (with multipart boundary).
+    const body = await request.arrayBuffer();
+    const contentType = request.headers.get('content-type') || '';
 
     // Forward request to backend with cookies from the incoming request
     const response = await fetch(`${backendUrl}/api/documents/personal`, {
@@ -19,11 +21,18 @@ export async function POST(request: NextRequest) {
       headers: {
         // Forward the Cookie header from the client request
         Cookie: request.headers.get('cookie') || '',
+        'Content-Type': contentType,
       },
-      body: formData,
+      body: new Uint8Array(body),
     });
 
-    const data = await response.json();
+    const raw = await response.text();
+    let data: unknown = { detail: raw || 'Unexpected server response' };
+    try {
+      data = raw ? JSON.parse(raw) : data;
+    } catch {
+      // Keep raw text fallback for non-JSON backend errors.
+    }
 
     if (!response.ok) {
       return NextResponse.json(data, { status: response.status });

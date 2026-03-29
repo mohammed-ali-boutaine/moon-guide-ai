@@ -61,12 +61,26 @@ interface Stats {
 
 type RoleFilter = 'ALL' | 'STUDENT' | 'TEACHER' | 'ADMIN';
 
+interface PlatformAnalytics {
+  total_quizzes: number;
+  total_attempts: number;
+  avg_score: number | null;
+  score_distribution: {
+    excellent: number;
+    good: number;
+    average: number;
+    below_average: number;
+  };
+}
+
 export default function AdminDashboard() {
   const { user } = useAuth();
   const { success, error: notifyError } = useNotification();
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const [tab, setTab] = useState<'stats' | 'users'>('stats');
+  const [tab, setTab] = useState<'stats' | 'users' | 'analytics'>('stats');
+  const [platformAnalytics, setPlatformAnalytics] = useState<PlatformAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -111,8 +125,22 @@ export default function AdminDashboard() {
     }
   }, [API_URL, page, roleFilter]);
 
+  const loadAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/analytics`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load analytics');
+      setPlatformAnalytics(await res.json());
+    } catch {
+      notifyError('Failed to load analytics.');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [API_URL]);
+
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { if (tab === 'users') loadUsers(); }, [tab, loadUsers]);
+  useEffect(() => { if (tab === 'analytics') loadAnalytics(); }, [tab, loadAnalytics]);
 
   const handleExport = async () => {
     try {
@@ -245,7 +273,7 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-gray-800">
-            {([['stats', 'Statistics'], ['users', 'Users']] as [typeof tab, string][]).map(([id, label]) => (
+            {([['stats', 'Statistics'], ['analytics', 'Analytics'], ['users', 'Users']] as [typeof tab, string][]).map(([id, label]) => (
               <button key={id} onClick={() => setTab(id)} className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${tab === id ? 'border-white text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>{label}</button>
             ))}
           </div>
@@ -273,6 +301,72 @@ export default function AdminDashboard() {
                   <DownloadIcon />Export users CSV
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Analytics tab */}
+          {tab === 'analytics' && (
+            <div>
+              {analyticsLoading ? (
+                <div className="flex justify-center py-16"><LoadingSpinner /></div>
+              ) : platformAnalytics ? (
+                <div className="space-y-6">
+                  {/* KPI cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {[
+                      { label: 'Total Quizzes', value: platformAnalytics.total_quizzes.toLocaleString(), color: 'blue' },
+                      { label: 'Total Attempts', value: platformAnalytics.total_attempts.toLocaleString(), color: 'purple' },
+                      { label: 'Platform Avg. Score', value: platformAnalytics.avg_score !== null ? `${platformAnalytics.avg_score}%` : '—', color: platformAnalytics.avg_score !== null && platformAnalytics.avg_score >= 75 ? 'green' : platformAnalytics.avg_score !== null && platformAnalytics.avg_score >= 50 ? 'yellow' : 'red' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className={`bg-gray-900 border border-gray-800 rounded-2xl p-6 flex items-center gap-4`}>
+                        <div className={`p-3 rounded-xl border ${colorMap[color]}`}>
+                          <BarChartIcon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-gray-100">{value}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Score distribution */}
+                  <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+                    <h2 className="text-base font-semibold text-gray-100 mb-4">Score Distribution (all attempts)</h2>
+                    {platformAnalytics.total_attempts === 0 ? (
+                      <p className="text-gray-500 text-sm text-center py-6">No attempts yet.</p>
+                    ) : (() => {
+                      const total = platformAnalytics.total_attempts;
+                      const bands = [
+                        { label: 'Excellent (≥ 90%)', count: platformAnalytics.score_distribution.excellent, color: 'bg-green-500' },
+                        { label: 'Good (75–89%)', count: platformAnalytics.score_distribution.good, color: 'bg-green-600' },
+                        { label: 'Average (50–74%)', count: platformAnalytics.score_distribution.average, color: 'bg-yellow-500' },
+                        { label: 'Below Average (< 50%)', count: platformAnalytics.score_distribution.below_average, color: 'bg-red-500' },
+                      ];
+                      return (
+                        <div className="space-y-3">
+                          {bands.map((band) => (
+                            <div key={band.label} className="flex items-center gap-3">
+                              <span className="text-xs text-gray-400 w-40 shrink-0">{band.label}</span>
+                              <div className="flex-1 h-2.5 bg-gray-800 rounded-full">
+                                <div
+                                  className={`h-2.5 rounded-full ${band.color}`}
+                                  style={{ width: `${total > 0 ? (band.count / total) * 100 : 0}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-400 w-14 text-right">
+                                {band.count} ({total > 0 ? Math.round((band.count / total) * 100) : 0}%)
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-gray-500 text-sm">No analytics data available.</div>
+              )}
             </div>
           )}
 

@@ -64,14 +64,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Skip /api/upload/ - these are handled by custom route handlers
-  if (pathname.startsWith('/api/upload/')) {
+  // Skip routes that have dedicated Next.js API route handlers.
+  // Middleware rewrite does not reliably forward POST bodies to external URLs,
+  // so these paths must be handled by their own route.ts proxy files.
+  if (
+    pathname.startsWith('/api/upload/') ||
+    pathname.startsWith('/api/quiz') ||
+    pathname.startsWith('/api/career')
+  ) {
     return NextResponse.next();
   }
 
-  // Proxy other /api/ requests to the backend (keep existing behaviour)
+  // Proxy other /api/ requests to the backend (keep existing behaviour).
+  // Use BACKEND_URL (server-side reachable) with NEXT_PUBLIC_API_URL as fallback.
   if (pathname.startsWith('/api/')) {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const url = request.nextUrl.clone();
     const parsed = new URL(apiUrl);
     url.host = parsed.host;

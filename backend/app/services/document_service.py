@@ -33,8 +33,17 @@ ALLOWED_MIME_TYPES: dict[str, FileTypeEnum] = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": FileTypeEnum.docx,
     "text/plain": FileTypeEnum.txt,
     "text/markdown": FileTypeEnum.md,
+    "text/x-markdown": FileTypeEnum.md,
 }
 ALLOWED_EXTENSIONS: set[str] = {".pdf", ".docx", ".txt", ".md"}
+
+# Fallback map: extension → FileTypeEnum when MIME type cannot be determined
+EXTENSION_FALLBACK: dict[str, FileTypeEnum] = {
+    ".pdf": FileTypeEnum.pdf,
+    ".docx": FileTypeEnum.docx,
+    ".txt": FileTypeEnum.txt,
+    ".md": FileTypeEnum.md,
+}
 
 UPLOAD_DIR: Path = Path("static/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -70,11 +79,18 @@ def _validate_file(file: UploadFile) -> FileTypeEnum:
     if content_type not in ALLOWED_MIME_TYPES:
         guessed, _ = mimetypes.guess_type(file.filename or "")
         if guessed not in ALLOWED_MIME_TYPES:
-            logger.warning("Rejected file with unsupported MIME type: %s (guessed: %s)", content_type, guessed)
-            raise HTTPException(
-                status_code=422,
-                detail=f"Unsupported MIME type '{content_type}'.",
-            )
+            # Last resort: use the file extension to determine type.
+            # Browsers (especially on Windows) often send application/octet-stream
+            # for .md and other text files whose MIME type isn't registered in the OS.
+            ext_type = EXTENSION_FALLBACK.get(ext)
+            if ext_type is None:
+                logger.warning("Rejected file with unsupported MIME type: %s (guessed: %s)", content_type, guessed)
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Unsupported MIME type '{content_type}'.",
+                )
+            logger.info("File validated via extension fallback: %s (ext=%s, content_type=%s)", file.filename, ext, content_type)
+            return ext_type
         content_type = guessed
 
     logger.info("File validated: %s (type=%s)", file.filename, content_type)
@@ -267,6 +283,10 @@ def _extract_text_from_file(file_path: str, file_type: str) -> str:
         with open(abs_path, "r", encoding="utf-8", errors="ignore") as f:
             text = f.read()
 
+    # PostgreSQL cannot store NUL (0x00) bytes in text columns.
+    # PyPDF2 and some DOCX files may produce them — strip them out.
+    text = text.replace("\x00", "")
+
     logger.info("Extracted %d characters from %s", len(text), abs_path)
     return text
 
@@ -449,6 +469,7 @@ def extract_and_embed(self, document_id: int, file_path: str, file_type: str, db
             document_id, exc, exc_info=True,
         )
         try:
+            db.rollback()  # clear any broken transaction before writing status
             db.query(Document).filter(Document.id == document_id).update(
                 {"status": StatusEnum.rejected, "rejection_reason": f"Processing failed: {exc}"}
             )

@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DBSession, selectinload
 
@@ -65,9 +65,13 @@ from app.schemas.grading import (
     ShortAnswerGradeResponse,
     TeacherReviewRequest,
 )
+from app.core.rate_limit import RateLimiter
 from app.services.notification_service import notify_quiz_assigned
 
 router = APIRouter(prefix="/quiz", tags=["Quiz Generation"])
+
+_rate_limit_quiz_gen = RateLimiter("quiz_gen", max_requests=5, window_seconds=60)
+_rate_limit_quiz_submit = RateLimiter("quiz_submit", max_requests=10, window_seconds=60)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -99,6 +103,7 @@ def generate_quiz(
     body: QuizGenerateRequest,
     current_user: CurrentUser,
     db: Annotated[DBSession, Depends(get_db)],
+    _: Annotated[None, Depends(_rate_limit_quiz_gen)],
 ) -> QuizJobResponse:
     """
     Enqueue a background job to generate MCQ + True/False questions from a document.
@@ -213,6 +218,167 @@ def get_job_status(
             detail="Job not found.",
         )
     return _job_to_response(job)
+
+
+# ── GET /quiz/struggling-students ────────────────────────────────────────────
+# NOTE: must be registered BEFORE /{quiz_id} so the literal path isn't captured
+# by the integer path parameter.
+
+@router.get(
+    "/struggling-students",
+    summary="List students with a low average score across teacher's classes",
+)
+def get_struggling_students(
+    current_user: TeacherUser,
+    db: Annotated[DBSession, Depends(get_db)],
+    threshold: float = Query(50.0, ge=0, le=100, description="Students whose avg score is below this value"),
+    class_id: uuid.UUID | None = None,
+):
+    """
+    Return every student in the teacher's classes whose average submitted-quiz
+    score is below `threshold` (default 50 %).  Optionally filter to a single
+    class.  Results are ordered by avg score ascending (most-struggling first).
+    """
+    from app.models.user import User
+    from app.models.user_profile import UserProfile
+
+    teacher_class_ids = db.scalars(
+        select(Class.id).where(Class.teacher_id == current_user.id)
+    ).all()
+
+    if not teacher_class_ids:
+        return {"items": [], "total": 0, "threshold": threshold}
+
+    if class_id is not None:
+        if class_id not in teacher_class_ids:
+            raise HTTPException(status_code=403, detail="Class not owned by teacher")
+        filter_ids = [class_id]
+    else:
+        filter_ids = list(teacher_class_ids)
+
+    rows = db.execute(
+        select(
+            User.id.label("student_id"),
+            UserProfile.first_name,
+            UserProfile.last_name,
+            User.email,
+            Class.id.label("class_id"),
+            Class.name.label("class_name"),
+            func.avg(QuizAttempt.score).label("avg_score"),
+            func.count(QuizAttempt.id).label("attempt_count"),
+        )
+        .join(QuizAttempt, QuizAttempt.student_id == User.id)
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .join(Class, Class.id == Quiz.class_id)
+        .outerjoin(UserProfile, UserProfile.user_id == User.id)
+        .where(
+            QuizAttempt.status == AttemptStatus.submitted,
+            QuizAttempt.score.is_not(None),
+            Class.id.in_(filter_ids),
+        )
+        .group_by(
+            User.id,
+            UserProfile.first_name,
+            UserProfile.last_name,
+            User.email,
+            Class.id,
+            Class.name,
+        )
+        .having(func.avg(QuizAttempt.score) < threshold)
+        .order_by(func.avg(QuizAttempt.score).asc())
+    ).all()
+
+    items = [
+        {
+            "student_id": str(row.student_id),
+            "first_name": row.first_name,
+            "last_name": row.last_name,
+            "email": row.email,
+            "class_id": str(row.class_id),
+            "class_name": row.class_name,
+            "avg_score": round(float(row.avg_score), 1),
+            "attempt_count": row.attempt_count,
+        }
+        for row in rows
+    ]
+
+    return {"items": items, "total": len(items), "threshold": threshold}
+
+
+# ── GET /quiz/assigned/{class_id} ─────────────────────────────────────────────
+# NOTE: must be registered BEFORE /{quiz_id} so the literal segment "assigned"
+# is not swallowed by the integer path parameter.
+
+@router.get(
+    "/assigned/{class_id}",
+    response_model=list[AssignedQuizItem],
+    summary="List quizzes assigned to a class",
+)
+def list_assigned_quizzes(
+    class_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> list[AssignedQuizItem]:
+    """
+    Return all active quiz assignments for a class.
+
+    - Teachers see this for classes they own.
+    - Students see this for classes they are enrolled in.
+    """
+    # Verify the class exists
+    cls = db.scalar(select(Class).where(Class.id == class_id))
+    if cls is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found.")
+
+    # Access control
+    is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
+    is_student = current_user.role and current_user.role.name == RoleName.STUDENT
+
+    if is_teacher and str(cls.teacher_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this class.",
+        )
+    if is_student:
+        from app.models.class_student import ClassStudent
+        enrolled = db.scalar(
+            select(ClassStudent).where(
+                ClassStudent.class_id == class_id,
+                ClassStudent.student_id == current_user.id,
+            )
+        )
+        if enrolled is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not enrolled in this class.",
+            )
+
+    assignments = db.scalars(
+        select(QuizAssignment)
+        .where(
+            QuizAssignment.class_id == class_id,
+            QuizAssignment.status == AssignmentStatus.active,
+        )
+        .options(
+            selectinload(QuizAssignment.quiz).options(
+                selectinload(Quiz.questions).selectinload(Question.answers)
+            ),
+            selectinload(QuizAssignment.assigned_by),
+        )
+        .order_by(QuizAssignment.assigned_at.desc())
+    ).all()
+
+    return [
+        AssignedQuizItem(
+            assignment_id=a.id,
+            assignment_status=a.status,
+            assigned_at=a.assigned_at,
+            assigned_by=a.assigned_by,
+            due_date=a.due_date,
+            quiz=QuizResponse.model_validate(a.quiz),
+        )
+        for a in assignments
+    ]
 
 
 # ── GET /quiz/{quiz_id} ───────────────────────────────────────────────────────
@@ -539,81 +705,6 @@ def update_quiz(
     return QuizResponse.model_validate(quiz)
 
 
-# ── GET /quiz/assigned/{class_id} ─────────────────────────────────────────────
-# NOTE: registered BEFORE /{quiz_id} so "assigned" is not mistaken for an int
-
-@router.get(
-    "/assigned/{class_id}",
-    response_model=list[AssignedQuizItem],
-    summary="List quizzes assigned to a class",
-)
-def list_assigned_quizzes(
-    class_id: uuid.UUID,
-    current_user: CurrentUser,
-    db: Annotated[DBSession, Depends(get_db)],
-) -> list[AssignedQuizItem]:
-    """
-    Return all active quiz assignments for a class.
-
-    - Teachers see this for classes they own.
-    - Students see this for classes they are enrolled in.
-    """
-    # Verify the class exists
-    cls = db.scalar(select(Class).where(Class.id == class_id))
-    if cls is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found.")
-
-    # Access control
-    is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
-    is_student = current_user.role and current_user.role.name == RoleName.STUDENT
-
-    if is_teacher and str(cls.teacher_id) != str(current_user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not own this class.",
-        )
-    if is_student:
-        from app.models.class_student import ClassStudent
-        enrolled = db.scalar(
-            select(ClassStudent).where(
-                ClassStudent.class_id == class_id,
-                ClassStudent.student_id == current_user.id,
-            )
-        )
-        if enrolled is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are not enrolled in this class.",
-            )
-
-    assignments = db.scalars(
-        select(QuizAssignment)
-        .where(
-            QuizAssignment.class_id == class_id,
-            QuizAssignment.status == AssignmentStatus.active,
-        )
-        .options(
-            selectinload(QuizAssignment.quiz).options(
-                selectinload(Quiz.questions).selectinload(Question.answers)
-            ),
-            selectinload(QuizAssignment.assigned_by),
-        )
-        .order_by(QuizAssignment.assigned_at.desc())
-    ).all()
-
-    return [
-        AssignedQuizItem(
-            assignment_id=a.id,
-            assignment_status=a.status,
-            assigned_at=a.assigned_at,
-            assigned_by=a.assigned_by,
-            due_date=a.due_date,
-            quiz=QuizResponse.model_validate(a.quiz),
-        )
-        for a in assignments
-    ]
-
-
 # ── POST /quiz/{quiz_id}/assign ───────────────────────────────────────────────
 
 @router.post(
@@ -888,6 +979,7 @@ def submit_quiz_attempt(
     body: QuizSubmitRequest,
     current_user: StudentUser,
     db: Annotated[DBSession, Depends(get_db)],
+    _: Annotated[None, Depends(_rate_limit_quiz_submit)],
 ) -> QuizAttemptSubmitResponse:
     """
     Submit a quiz attempt with all student answers.
@@ -1425,3 +1517,5 @@ def export_results_pdf(
                 "Content-Disposition": f'inline; filename="results_attempt_{attempt_id}.html"'
             },
         )
+
+

@@ -80,6 +80,15 @@ async def get_stats(
     return AdminService.get_stats(db)
 
 
+@router.get("/analytics", summary="Platform-wide learning analytics")
+async def get_platform_analytics(
+    _admin: User = Depends(require_admin),
+    db: DBSession = Depends(get_db),
+):
+    """Return platform-wide quiz and attempt statistics for the admin dashboard."""
+    return AdminService.get_platform_analytics(db)
+
+
 @router.get("/users/export", summary="Export users as CSV")
 async def export_users_csv(
     _admin: User = Depends(require_admin),
@@ -87,3 +96,37 @@ async def export_users_csv(
 ):
     """Stream all users as a downloadable CSV file."""
     return AdminService.export_users_csv(db)
+
+
+@router.get("/classes", summary="List all classes")
+async def list_all_classes(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None, description="Filter by class name"),
+    _admin: User = Depends(require_admin),
+    db: DBSession = Depends(get_db),
+):
+    """Return a paginated list of all classes across all teachers."""
+    return AdminService.list_all_classes(db, page, page_size, search)
+
+
+@router.delete("/classes/{class_id}", summary="Delete a class", status_code=204)
+async def admin_delete_class(
+    class_id: str,
+    _admin: User = Depends(require_admin),
+    db: DBSession = Depends(get_db),
+):
+    """Delete any class (admin override)."""
+    AdminService.delete_class(db, class_id)
+
+
+@router.get("/documents", summary="List all documents")
+async def list_all_documents(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    doc_status: Optional[str] = Query(None, alias="status", description="Filter by status"),
+    _admin: User = Depends(require_admin),
+    db: DBSession = Depends(get_db),
+):
+    """Return a paginated list of all documents across all classes."""
+    return AdminService.list_all_documents(db, page, page_size, doc_status)

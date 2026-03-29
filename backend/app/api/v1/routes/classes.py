@@ -23,6 +23,7 @@ from app.services.document_service import (
 
 from app.core.database import get_db
 from app.core.dependencies import TeacherUser,StudentUser,CurrentUser, get_current_user
+from app.core.rate_limit import RateLimiter
 from app.schemas.class_schema import (
     AddStudentRequest,
     AddStudentResponse,
@@ -42,6 +43,8 @@ from app.schemas.class_schema import (
 from app.services.class_service import ClassService
 
 router = APIRouter(prefix="/classes", tags=["classes"])
+
+_rate_limit_upload = RateLimiter("doc_upload", max_requests=10, window_seconds=300)
 
 
 @router.post(
@@ -335,6 +338,7 @@ async def upload_class_doc(
     current_user: Annotated[StudentUser | TeacherUser, Depends(get_current_user)],
     db: Annotated[DBSession, Depends(get_db)],
     file: UploadFile = File(..., description="PDF, DOCX, TXT or MD file (max 50 MB)"),
+    _: Annotated[None, Depends(_rate_limit_upload)] = None,
 ):
     """
     Upload a document to a class.
