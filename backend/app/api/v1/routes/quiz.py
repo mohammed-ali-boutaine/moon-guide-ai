@@ -613,44 +613,65 @@ def create_quiz(
             detail="Only teachers can create quizzes.",
         )
 
-    quiz = Quiz(
-        class_id=body.class_id,
-        title=body.title,
-        description=body.description,
-        difficulty=body.difficulty,
-        duration_minutes=body.duration_minutes,
-        max_attempts=body.max_attempts,
-        status=QuizStatus.draft,
-    )
-    db.add(quiz)
-    db.flush()  # obtain quiz.id before inserting children
-
-    for q_data in body.questions:
-        question = Question(
-            quiz_id=quiz.id,
-            type=q_data.type,
-            text=q_data.text,
-            order=q_data.order,
+    try:
+        quiz = Quiz(
+            class_id=body.class_id,
+            title=body.title,
+            description=body.description,
+            difficulty=body.difficulty,
+            duration_minutes=body.duration_minutes,
+            max_attempts=body.max_attempts,
+            status=QuizStatus.draft,
         )
-        db.add(question)
-        db.flush()
-        for a_data in q_data.answers:
-            db.add(Answer(
-                question_id=question.id,
-                text=a_data.text,
-                is_correct=a_data.is_correct,
-                order=a_data.order,
-            ))
+        db.add(quiz)
+        db.flush()  # obtain quiz.id before inserting children
 
-    db.commit()
+        for q_data in body.questions:
+            question = Question(
+                quiz_id=quiz.id,
+                type=q_data.type,
+                text=q_data.text,
+                order=q_data.order,
+            )
+            db.add(question)
+            db.flush()
+            for a_data in q_data.answers:
+                db.add(Answer(
+                    question_id=question.id,
+                    text=a_data.text,
+                    is_correct=a_data.is_correct,
+                    order=a_data.order,
+                ))
 
-    quiz = db.scalar(
-        select(Quiz)
-        .where(Quiz.id == quiz.id)
-        .options(selectinload(Quiz.questions).selectinload(Question.answers))
-    )
-    logger.info("Quiz created manually: id=%d user=%s", quiz.id, current_user.email)
-    return QuizResponse.model_validate(quiz)
+        db.commit()
+
+        # Re-fetch the quiz with all relationships loaded
+        quiz_id = quiz.id
+        db.expunge_all()  # Clear the session to ensure fresh load
+        quiz = db.scalar(
+            select(Quiz)
+            .where(Quiz.id == quiz_id)
+            .options(selectinload(Quiz.questions).selectinload(Question.answers))
+        )
+        if not quiz:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to retrieve created quiz.",
+            )
+        logger.info("Quiz created manually: id=%d user=%s", quiz.id, current_user.email)
+        return QuizResponse.model_validate(quiz)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to create quiz for user=%s: %s", current_user.email, exc, exc_info=True)
+        try:
+            db.rollback()
+        except:
+            pass
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create quiz. Please try again.",
+        ) from exc
 
 
 # ── PATCH /quiz/{quiz_id} ─────────────────────────────────────────────────────

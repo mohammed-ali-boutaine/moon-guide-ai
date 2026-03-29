@@ -541,6 +541,11 @@ def generate_quiz_task(
 
         # Update job to failed
         try:
+            db.rollback()  # clear broken transaction
+        except Exception as rollback_exc:
+            logger.warning("[Quiz] Rollback failed for job=%s: %s", job_id, rollback_exc)
+
+        try:
             job = db.scalar(select(QuizJob).where(QuizJob.id == uuid.UUID(job_id)))
             if job:
                 job.status = JobStatus.failed
@@ -548,12 +553,22 @@ def generate_quiz_task(
                 db.commit()
         except Exception as db_exc:
             logger.error("[Quiz] Failed to update job status: %s", db_exc)
+            try:
+                db.rollback()
+            except:
+                pass
 
         raise self.retry(exc=exc)
 
     finally:
-        db.close()
-        engine.dispose()
+        try:
+            db.close()
+        except:
+            pass
+        try:
+            engine.dispose()
+        except:
+            pass
 
 
 # ── Celery task: auto-correct a submitted attempt ─────────────────────────────
@@ -736,10 +751,16 @@ def correct_quiz_attempt_task(self, attempt_id: int, db_url: str) -> dict:
         )
         try:
             db.rollback()
-        except Exception:
-            pass
+        except Exception as rollback_exc:
+            logger.warning("[Correct] Rollback failed for attempt=%d: %s", attempt_id, rollback_exc)
         raise self.retry(exc=exc)
 
     finally:
-        db.close()
-        engine.dispose()
+        try:
+            db.close()
+        except:
+            pass
+        try:
+            engine.dispose()
+        except:
+            pass

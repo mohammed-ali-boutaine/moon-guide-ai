@@ -53,7 +53,7 @@ def _load_model() -> None:
         _label_to_id = json.load(f)
     _id_to_label = {v: k for k, v in _label_to_id.items()}
 
-    # ── Model definition (must match notebook architecture) ──────────────
+    # ── Model definition (must match train.py architecture) ──────────────
     class CareerClassifier(nn.Module):
         def __init__(self, num_classes: int = 6):
             super().__init__()
@@ -62,10 +62,13 @@ def _load_model() -> None:
                 param.requires_grad = False
             self.classifier = nn.Sequential(
                 nn.Linear(384, 256),
+                nn.BatchNorm1d(256),
                 nn.ReLU(),
                 nn.Dropout(0.3),
                 nn.Linear(256, 128),
+                nn.BatchNorm1d(128),
                 nn.ReLU(),
+                nn.Dropout(0.2),
                 nn.Linear(128, num_classes),
             )
 

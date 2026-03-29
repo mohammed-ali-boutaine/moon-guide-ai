@@ -20,23 +20,6 @@ services:
     networks:
       - moon-guide-network
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: moon-guide-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@moonguide.dev}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
-      PGADMIN_LISTEN_PORT: 80
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    restart: unless-stopped
-    networks:
-      - moon-guide-network
 
   # Redis Cache
   redis:
@@ -172,7 +155,6 @@ volumes:
   postgres_data:
   redis_data:
   qdrant_data:
-  pgadmin_data:
 
 networks:
   moon-guide-network:

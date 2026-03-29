@@ -285,7 +285,8 @@ def _extract_text_from_file(file_path: str, file_type: str) -> str:
 
     # PostgreSQL cannot store NUL (0x00) bytes in text columns.
     # PyPDF2 and some DOCX files may produce them — strip them out.
-    text = text.replace("\x00", "")
+    # Also strip other control characters that cause issues.
+    text = "".join(c for c in text if c == "\n" or c == "\t" or ord(c) >= 32)
 
     logger.info("Extracted %d characters from %s", len(text), abs_path)
     return text
@@ -470,16 +471,30 @@ def extract_and_embed(self, document_id: int, file_path: str, file_type: str, db
         )
         try:
             db.rollback()  # clear any broken transaction before writing status
+        except Exception as rollback_exc:
+            logger.warning("[Celery] Rollback failed for doc=%d: %s", document_id, rollback_exc)
+
+        try:
             db.query(Document).filter(Document.id == document_id).update(
                 {"status": StatusEnum.rejected, "rejection_reason": f"Processing failed: {exc}"}
             )
             db.commit()
         except Exception as db_exc:
             logger.error("[Celery] Failed to update doc status: %s", db_exc)
+            try:
+                db.rollback()
+            except:
+                pass
         raise self.retry(exc=exc)
     finally:
-        db.close()
-        engine.dispose()
+        try:
+            db.close()
+        except:
+            pass
+        try:
+            engine.dispose()
+        except:
+            pass
 
 
 @celery.task(

@@ -216,6 +216,38 @@ async def send_message(
     try:
         if session.class_id:
             # Class session: single collection, search by class_id
+            from app.models.class_ import Class
+            from app.models.role import RoleName
+
+            # Verify the current user has access to this class
+            cls = db.scalar(select(Class).where(Class.id == session.class_id))
+            if cls is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Class not found.",
+                )
+
+            is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
+            if is_teacher and str(cls.teacher_id) != str(current_user.id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not the teacher of this class.",
+                )
+
+            if not is_teacher:
+                from app.models.class_student import ClassStudent
+                enrolled = db.scalar(
+                    select(ClassStudent).where(
+                        ClassStudent.class_id == session.class_id,
+                        ClassStudent.student_id == current_user.id,
+                    )
+                )
+                if enrolled is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You are not enrolled in this class.",
+                    )
+
             class_id_str = str(session.class_id)
             docs = db.scalars(
                 select(Document).where(
@@ -241,6 +273,8 @@ async def send_message(
                 personal_document_ids = [body.document_id]
             else:
                 personal_document_ids = [d.id for d in docs]
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("Could not build doc context: %s", exc)
 
@@ -272,34 +306,45 @@ async def send_message(
         )
 
     # ── Persist user message ─────────────────────────────────────────────────
-    user_msg = ChatMessage(
-        session_id=session_id,
-        role=ChatRole.user.value,
-        content=body.content,
-        sources_json=None,
-    )
-    db.add(user_msg)
+    try:
+        user_msg = ChatMessage(
+            session_id=session_id,
+            role=ChatRole.user.value,
+            content=body.content,
+            sources_json=None,
+        )
+        db.add(user_msg)
 
-    # ── Persist assistant message ────────────────────────────────────────────
-    sources_payload = [
-        {
-            "document_id": s["document_id"],
-            "document_filename": s["document_filename"],
-            "chunk_index": s["chunk_index"],
-            "score": s["score"],
-        }
-        for s in rag_result.sources
-    ]
-    assistant_msg = ChatMessage(
-        session_id=session_id,
-        role=ChatRole.assistant.value,
-        content=rag_result.answer,
-        sources_json=sources_payload if sources_payload else None,
-    )
-    db.add(assistant_msg)
-    db.commit()
-    db.refresh(user_msg)
-    db.refresh(assistant_msg)
+        # ── Persist assistant message ────────────────────────────────────────
+        sources_payload = [
+            {
+                "document_id": s["document_id"],
+                "document_filename": s["document_filename"],
+                "chunk_index": s["chunk_index"],
+                "score": s["score"],
+            }
+            for s in rag_result.sources
+        ]
+        assistant_msg = ChatMessage(
+            session_id=session_id,
+            role=ChatRole.assistant.value,
+            content=rag_result.answer,
+            sources_json=sources_payload if sources_payload else None,
+        )
+        db.add(assistant_msg)
+        db.commit()
+        db.refresh(user_msg)
+        db.refresh(assistant_msg)
+    except Exception as exc:
+        logger.error("Failed to persist chat messages for session=%s: %s", session_id, exc, exc_info=True)
+        try:
+            db.rollback()
+        except:
+            pass
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save chat messages. Please try again.",
+        ) from exc
 
     logger.info(
         "RAG done: session=%s had_context=%s tokens=%d",
