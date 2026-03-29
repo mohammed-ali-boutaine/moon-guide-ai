@@ -40,6 +40,11 @@ jobs:
         image: qdrant/qdrant:latest
         ports:
           - 6333:6333
+        options: >-
+          --health-cmd="timeout 5 bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     # Environment Variables
     # These are shared by all steps
@@ -49,10 +54,16 @@ jobs:
       SYSTEM_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
       SECRET_KEY: ci-test-secret-key-change-in-production-min-32-chars
       ALGORITHM: HS256
-      REDIS_URL: redis://localhost:6379
+      REDIS_URL: redis://localhost:6379/0
       QDRANT_URL: http://localhost:6333
       FRONTEND_URL: http://localhost:3000
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      EMBEDDING_PROVIDER: sentence-transformers
+      EMBEDDING_CACHE_ENABLED: "false"
+      LLM_PROVIDER: gemini
+      GEMINI_API_KEY: ""
+      CLAMAV_ENABLED: "false"
+      ENV: test
 
     # Steps are the individual tasks that run sequentially in the job
     steps:
@@ -86,6 +97,10 @@ jobs:
       #   run: |
       #     ruff check . 
       #     black --check .
+
+      # Ensure static directory exists (needed by app.mount)
+      - name: Create static directory
+        run: mkdir -p backend/static/uploads backend/static/avatars
 
       # Run backend unit/integration tests
       - name: Run backend tests

@@ -4,7 +4,7 @@ Personal document endpoints.
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, BackgroundTasks, UploadFile, File, Form, Response
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, UploadFile, File, Form, Response
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.database import get_db
@@ -12,6 +12,7 @@ from app.core.dependencies import CurrentUser
 from app.core.logging import logger
 from app.core.rate_limit import RateLimiter
 from app.models.document import RoleEnum
+from app.models.document import Document
 from app.schemas.document import DocumentUploadResponse, DocumentListResponse, DocumentResponse
 from app.services.document_service import upload_personal_document, list_personal_documents, soft_delete_document
 
@@ -60,6 +61,22 @@ def get_personal_documents(
     """List the caller's personal documents."""
     docs = list_personal_documents(uploaded_by_id=str(current_user.id), db=db)
     return DocumentListResponse(documents=docs, total=len(docs))
+
+
+@router.get("/{document_id}/status")
+def get_document_status(
+    document_id: int,
+    current_user: CurrentUser,
+    db: Annotated[DBSession, Depends(get_db)],
+):
+    """Poll processing status for a document. Returns status and chunk count."""
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if str(doc.uploaded_by_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    chunk_count = len(doc.chunks) if doc.chunks else 0
+    return {"document_id": doc.id, "status": doc.status, "chunk_count": chunk_count, "filename": doc.filename}
 
 
 @router.delete("/{document_id}", status_code=204, response_class=Response)

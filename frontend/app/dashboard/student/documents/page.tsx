@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { DocumentUpload, DocumentList } from '@/components/documents';
@@ -17,8 +17,25 @@ export default function StudentDocumentsPage() {
   const { success: showSuccess, error: showError } = useNotification();
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
 
-  // Fetch personal documents
+  // Fetch personal documents (polls every 5s automatically)
   const { data: documentsData, isLoading: isLoadingDocs } = usePersonalDocuments();
+
+  // When the document list updates, transition any processing uploads to completed/rejected
+  useEffect(() => {
+    if (!documentsData?.documents) return;
+    setUploads((prev) => {
+      const hasProcessing = prev.some((u) => u.status === 'processing' && u.documentId);
+      if (!hasProcessing) return prev;
+      return prev.map((u) => {
+        if (u.status !== 'processing' || !u.documentId) return u;
+        const doc = documentsData.documents.find((d) => d.id === u.documentId);
+        if (!doc) return u;
+        if (doc.status === 'ready') return { ...u, status: 'completed', progress: 100 };
+        if (doc.status === 'rejected') return { ...u, status: 'error', error: 'Processing failed' };
+        return u;
+      });
+    });
+  }, [documentsData]);
 
   // Mutations
   const uploadMutation = useUploadPersonalDocument();

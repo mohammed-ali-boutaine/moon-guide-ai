@@ -1,0 +1,104 @@
+---
+title: Moon Guide AI — Use Case Diagram
+---
+%%{init: {"theme": "dark"}}%%
+graph LR
+    %% Actors
+    Student(["👤 Student"])
+    Teacher(["👤 Teacher"])
+    Admin(["👤 Admin"])
+    AI(["🤖 AI System"])
+
+    %% Auth use cases
+    subgraph AUTH["Authentication"]
+        UC1["Register"]
+        UC2["Login / Logout"]
+        UC3["Manage Profile"]
+    end
+
+    %% Student use cases
+    subgraph STUDENT_UC["Student Features"]
+        UC10["Upload Personal Document"]
+        UC11["View Personal Documents"]
+        UC12["Chat with AI (RAG)"]
+        UC13["Take Quiz"]
+        UC14["View Quiz Results"]
+        UC15["Manage Flashcards"]
+        UC16["Career Orientation Prediction"]
+        UC17["Enroll in Class"]
+        UC18["View Class Documents"]
+    end
+
+    %% Teacher use cases
+    subgraph TEACHER_UC["Teacher Features"]
+        UC20["Create / Manage Class"]
+        UC21["Upload Class Document"]
+        UC22["Generate Quiz (AI)"]
+        UC23["Assign Quiz to Class"]
+        UC24["View Student Attempts"]
+        UC25["Chat with Class (AI)"]
+        UC26["Monitor Class Activity"]
+    end
+
+    %% Admin use cases
+    subgraph ADMIN_UC["Admin Features"]
+        UC30["Manage Users"]
+        UC31["Approve / Reject Documents"]
+        UC32["View Platform Analytics"]
+    end
+
+    %% AI System actions
+    subgraph AI_UC["AI Processing"]
+        UC40["Embed Documents (Gemini)"]
+        UC41["Retrieve Relevant Chunks (RAG)"]
+        UC42["Generate LLM Response (Gemini)"]
+        UC43["Generate Quiz Questions"]
+        UC44["Predict Career Path (PyTorch)"]
+        UC45["Process Document (Celery)"]
+    end
+
+    %% Student relationships
+    Student --- UC1
+    Student --- UC2
+    Student --- UC3
+    Student --- UC10
+    Student --- UC11
+    Student --- UC12
+    Student --- UC13
+    Student --- UC14
+    Student --- UC15
+    Student --- UC16
+    Student --- UC17
+    Student --- UC18
+
+    %% Teacher relationships
+    Teacher --- UC1
+    Teacher --- UC2
+    Teacher --- UC3
+    Teacher --- UC20
+    Teacher --- UC21
+    Teacher --- UC22
+    Teacher --- UC23
+    Teacher --- UC24
+    Teacher --- UC25
+    Teacher --- UC26
+
+    %% Admin relationships
+    Admin --- UC2
+    Admin --- UC30
+    Admin --- UC31
+    Admin --- UC32
+
+    %% AI System relationships
+    UC10 -.->|"triggers"| UC45
+    UC45 -.->|"calls"| UC40
+    UC12 -.->|"calls"| UC41
+    UC41 -.->|"calls"| UC42
+    UC22 -.->|"calls"| UC43
+    UC16 -.->|"calls"| UC44
+    AI --- UC40
+    AI --- UC41
+    AI --- UC42
+    AI --- UC43
+    AI --- UC44
+    AI --- UC45

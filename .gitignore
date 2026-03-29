@@ -16,7 +16,6 @@ venv/
 *.egg-info/
 dist/
 build/
-*.md
 # Node
 node_modules/
 .next/

@@ -27,7 +27,25 @@ async def lifespan(app: FastAPI):
         logger.info("Qdrant vector database connected")
     except Exception as e:
         logger.warning(f"Qdrant not available (non-fatal): {e}")
-    
+
+    # Print active configuration (non-sensitive values only)
+    logger.info("=" * 40)
+    logger.info("  Moon Guide AI — Active Configuration")
+    logger.info("=" * 40)
+    logger.info(f"  Environment      : {settings.ENV}")
+    logger.info(f"  LLM Provider     : {settings.LLM_PROVIDER}")
+    logger.info(f"  LLM Model        : {settings.GEMINI_MODEL if settings.LLM_PROVIDER == 'gemini' else settings.MISTRAL_CHAT_MODEL if settings.LLM_PROVIDER == 'mistral' else settings.OLLAMA_MODEL}")
+    logger.info(f"  Embedding        : {settings.EMBEDDING_PROVIDER}")
+    logger.info(f"  Embedding Cache  : {settings.EMBEDDING_CACHE_ENABLED}")
+    logger.info(f"  Qdrant URL       : {settings.QDRANT_URL}")
+    logger.info(f"  Redis URL        : {settings.REDIS_URL}")
+    logger.info(f"  Chunk Size       : {settings.CHUNK_SIZE} tokens")
+    logger.info(f"  RAG Top K        : {settings.RAG_TOP_K}")
+    logger.info(f"  RAG Threshold    : {settings.RAG_SCORE_THRESHOLD}")
+    logger.info(f"  Frontend URL     : {settings.FRONTEND_URL}")
+    logger.info(f"  Debug Mode       : {settings.DEBUG}")
+    logger.info("=" * 40)
+
     yield
     
     # Shutdown

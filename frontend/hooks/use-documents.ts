@@ -235,3 +235,33 @@ export function useDeleteDocument(classId?: string) {
     },
   });
 }
+
+// Fetch individual document status
+async function fetchDocumentStatus(documentId: number) {
+  const response = await fetch(`${API_URL}/api/documents/${documentId}/status`, {
+    ...AUTH_FETCH_OPTIONS,
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to fetch document status');
+  }
+  return response.json() as Promise<{
+    document_id: number;
+    status: string;
+    chunk_count: number;
+    filename: string;
+  }>;
+}
+
+// Hook to poll a single document's processing status. Stops polling once ready or rejected.
+export function useDocumentStatus(documentId: number | null) {
+  return useQuery({
+    queryKey: ['document-status', documentId],
+    queryFn: () => fetchDocumentStatus(documentId!),
+    enabled: !!documentId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'ready' || status === 'rejected' ? false : 2000;
+    },
+  });
+}

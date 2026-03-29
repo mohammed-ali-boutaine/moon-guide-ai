@@ -73,7 +73,6 @@ def test_engine():
             "\n" + "=" * 70 + "\n"
             "PostgreSQL is not running. To run tests, start PostgreSQL:\n\n"
             "Option 1 - Using Docker (recommended):\n"
-            "  cd c:\\Users\\ELITBOOK\\Documents\\moon-guide-ai\n"
             "  docker-compose up -d postgres\n"
             "  (Requires Docker Desktop to be running)\n\n"
             "Option 2 - Using native PostgreSQL:\n"

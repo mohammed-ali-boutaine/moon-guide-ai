@@ -1,0 +1,185 @@
+---
+title: Moon Guide AI — Class Diagram
+---
+%%{init: {"theme": "dark"}}%%
+classDiagram
+    class User {
+        +UUID id
+        +str email
+        +str password_hash
+        +bool is_active
+        +datetime created_at
+        +UUID role_id
+    }
+
+    class Role {
+        +UUID id
+        +RoleNameEnum name
+    }
+
+    class UserProfile {
+        +UUID id
+        +UUID user_id
+        +str first_name
+        +str last_name
+        +str avatar_url
+        +str bio
+    }
+
+    class Session {
+        +UUID id
+        +UUID user_id
+        +str token_hash
+        +datetime expires_at
+        +bool is_active
+    }
+
+    class Class {
+        +UUID id
+        +str name
+        +str description
+        +UUID teacher_id
+        +datetime created_at
+    }
+
+    class ClassStudent {
+        +UUID class_id
+        +UUID student_id
+        +datetime joined_at
+    }
+
+    class Document {
+        +int id
+        +str filename
+        +str file_url
+        +DocumentStatus status
+        +DocumentScope scope
+        +UUID uploaded_by_id
+        +UUID class_id
+        +int file_size_bytes
+    }
+
+    class DocumentChunk {
+        +int id
+        +int document_id
+        +str text
+        +int chunk_index
+        +list~float~ embedding
+    }
+
+    class ChatSession {
+        +UUID id
+        +UUID user_id
+        +UUID class_id
+        +str scope
+        +datetime created_at
+    }
+
+    class ChatMessage {
+        +UUID id
+        +UUID session_id
+        +str role
+        +str content
+        +datetime created_at
+    }
+
+    class Quiz {
+        +UUID id
+        +UUID class_id
+        +str title
+        +str description
+        +QuizStatus status
+        +datetime created_at
+    }
+
+    class QuizJob {
+        +UUID id
+        +UUID class_id
+        +str status
+        +str error
+        +datetime created_at
+    }
+
+    class Question {
+        +UUID id
+        +UUID quiz_id
+        +str text
+        +QuestionType type
+        +int points
+        +int order
+    }
+
+    class Answer {
+        +UUID id
+        +UUID question_id
+        +str text
+        +bool is_correct
+    }
+
+    class QuizAttempt {
+        +UUID id
+        +UUID quiz_id
+        +UUID student_id
+        +float score
+        +datetime started_at
+        +datetime submitted_at
+    }
+
+    class StudentAnswer {
+        +UUID id
+        +UUID attempt_id
+        +UUID question_id
+        +str text_answer
+        +UUID selected_answer_id
+    }
+
+    class Flashcard {
+        +int id
+        +UUID user_id
+        +str front
+        +str back
+        +datetime created_at
+    }
+
+    class Notification {
+        +UUID id
+        +UUID user_id
+        +str title
+        +str message
+        +bool is_read
+        +datetime created_at
+    }
+
+    class QuizAssignment {
+        +UUID id
+        +UUID quiz_id
+        +UUID class_id
+        +datetime due_date
+    }
+
+    %% Relationships
+    User "1" --> "1" Role : has
+    User "1" --> "1" UserProfile : has
+    User "1" --> "*" Session : authenticates via
+    User "1" --> "*" Class : teaches
+    User "*" --> "*" Class : enrolled in
+    Class "1" --> "*" ClassStudent : has
+    User "1" --> "*" ClassStudent : is
+    User "1" --> "*" Document : uploads
+    Class "1" --> "*" Document : contains
+    Document "1" --> "*" DocumentChunk : split into
+    User "1" --> "*" ChatSession : owns
+    Class "1" --> "*" ChatSession : context
+    ChatSession "1" --> "*" ChatMessage : contains
+    Class "1" --> "*" Quiz : has
+    Quiz "1" --> "*" Question : contains
+    Question "1" --> "*" Answer : has options
+    Quiz "1" --> "*" QuizAttempt : has
+    User "1" --> "*" QuizAttempt : takes
+    QuizAttempt "1" --> "*" StudentAnswer : records
+    Question "1" --> "*" StudentAnswer : answered by
+    Quiz "1" --> "*" QuizAssignment : assigned via
+    Class "1" --> "*" QuizAssignment : for
+    User "1" --> "*" Flashcard : owns
+    User "1" --> "*" Notification : receives
+    Class "1" --> "*" QuizJob : generates
