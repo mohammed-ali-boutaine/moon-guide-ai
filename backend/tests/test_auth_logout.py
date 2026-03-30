@@ -70,8 +70,6 @@ def test_cannot_refresh_after_logout(client: TestClient, auth_headers):
     
     assert response.status_code == 401
 
-
-def test_logout_all_sessions(client: TestClient, test_user, db_session):
     """Test logout from all devices"""
     from app.models.session import Session
     
