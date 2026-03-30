@@ -29,7 +29,10 @@ class Question(Base):
         nullable=False,
         index=True,
     )
-    type: Mapped[QuestionType] = mapped_column(Enum(QuestionType), nullable=False)
+    type: Mapped[QuestionType] = mapped_column(
+        Enum(QuestionType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
     text: Mapped[str] = mapped_column(Text, nullable=False)
     order: Mapped[int] = mapped_column(Integer, nullable=False)
     points: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")

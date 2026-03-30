@@ -251,7 +251,7 @@ export default function QuizResultsPage() {
   }
 
   function handleExportPdf() {
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/quiz/${id}/results/pdf`;
+    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/quiz/${id}/results/pdf`;
     window.open(url, '_blank');
   }
 

@@ -136,8 +136,10 @@ export interface DocumentUploadResponse {
   message: string;
 }
 
+/** Display-only upload row — avoid storing File in React state (breaks Firefox Xray when spreading updates). */
 export interface UploadProgress {
-  file: File;
+  fileName: string;
+  fileSize: number;
   progress: number;
   status: 'uploading' | 'processing' | 'completed' | 'error';
   error?: string;

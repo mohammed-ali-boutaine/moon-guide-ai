@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 /**
  * API proxy: POST /api/upload/personal
@@ -7,9 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(request: NextRequest) {
   try {
-    // BACKEND_URL env var for flexibility: Docker uses 'http://backend:8000',
-    // local dev without Docker falls back to 'http://localhost:8000'
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = resolveBackendBaseUrl();
 
     // Forward the raw body bytes and original Content-Type (with multipart boundary).
     const body = await request.arrayBuffer();

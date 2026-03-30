@@ -101,11 +101,12 @@ class Settings(BaseSettings):
     BACKEND_URL: str = "http://localhost:8000"
 
     # LLM Provider for generation (chat, quiz, grading)
-    LLM_PROVIDER: str = "ollama"  # "gemini" | "mistral" | "ollama"
+    LLM_PROVIDER: str = "gemini"  # "gemini" | "mistral" | "ollama"
 
     # Gemini LLM
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    # Use a model available to new API keys; gemini-2.0-flash was retired for new users.
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_MAX_RETRIES: int = 3
 
     # Shared LLM settings (apply to whichever provider is active)

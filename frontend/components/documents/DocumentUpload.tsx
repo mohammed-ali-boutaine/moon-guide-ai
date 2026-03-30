@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { UploadProgress } from '@/types';
 
 interface DocumentUploadProps {
@@ -19,7 +19,7 @@ export default function DocumentUpload({
   disabled = false,
 }: DocumentUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useState<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -148,7 +148,7 @@ export default function DocumentUpload({
       >
         <input
           type="file"
-          ref={(el) => { fileInputRef[1](el); }}
+          ref={fileInputRef}
           onChange={handleFileSelect}
           accept={accept}
           multiple
@@ -180,10 +180,10 @@ export default function DocumentUpload({
                 {getStatusIcon(upload.status)}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-200 truncate">
-                    {upload.file.name}
+                    {upload.fileName}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {(upload.file.size / (1024 * 1024)).toFixed(2)} MB
+                    {(upload.fileSize / (1024 * 1024)).toFixed(2)} MB
                   </p>
                 </div>
                 <span className={`

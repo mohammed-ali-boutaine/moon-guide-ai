@@ -13,7 +13,7 @@ const FETCH_OPTS: RequestInit = {
 // ── API functions ─────────────────────────────────────────────────────────────
 
 async function fetchAttemptResults(attemptId: number): Promise<AttemptResultResponse> {
-  const res = await fetch(`${API_URL}/api/v1/quiz/${attemptId}/results`, FETCH_OPTS);
+  const res = await fetch(`${API_URL}/api/quiz/${attemptId}/results`, FETCH_OPTS);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to load results');
@@ -22,7 +22,7 @@ async function fetchAttemptResults(attemptId: number): Promise<AttemptResultResp
 }
 
 async function requestFeedback(attemptId: number): Promise<void> {
-  const res = await fetch(`${API_URL}/api/v1/quiz/${attemptId}/generate-feedback`, {
+  const res = await fetch(`${API_URL}/api/quiz/${attemptId}/generate-feedback`, {
     method: 'POST',
     ...FETCH_OPTS,
   });

@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {  DocumentListResponse, DocumentUploadResponse } from '@/types';
 
@@ -184,40 +185,56 @@ export function usePersonalDocuments() {
   });
 }
 
-// Hook to upload class document
+/**
+ * Class document upload without useMutation variables — storing `File` in TanStack Query
+ * mutation state triggers Firefox XrayWrapper errors when DevTools/extensions inspect it.
+ */
 export function useUploadClassDocument(classId: string) {
   const queryClient = useQueryClient();
+  const inFlightRef = useRef(0);
+  const [isPending, setIsPending] = useState(false);
 
-  return useMutation({
-    mutationFn: async ({
-      file,
-      onProgress,
-    }: {
-      file: File;
-      onProgress: (progress: number) => void;
-    }) => uploadClassDocument(classId, file, onProgress),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['class-documents', classId] });
+  const upload = useCallback(
+    async (file: File, onProgress: (progress: number) => void) => {
+      inFlightRef.current += 1;
+      setIsPending(true);
+      try {
+        const result = await uploadClassDocument(classId, file, onProgress);
+        queryClient.invalidateQueries({ queryKey: ['class-documents', classId] });
+        return result;
+      } finally {
+        inFlightRef.current -= 1;
+        if (inFlightRef.current === 0) setIsPending(false);
+      }
     },
-  });
+    [classId, queryClient]
+  );
+
+  return { upload, isPending };
 }
 
-// Hook to upload personal document
 export function useUploadPersonalDocument() {
   const queryClient = useQueryClient();
+  const inFlightRef = useRef(0);
+  const [isPending, setIsPending] = useState(false);
 
-  return useMutation({
-    mutationFn: async ({
-      file,
-      onProgress,
-    }: {
-      file: File;
-      onProgress: (progress: number) => void;
-    }) => uploadPersonalDocument(file, onProgress),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['personal-documents'] });
+  const upload = useCallback(
+    async (file: File, onProgress: (progress: number) => void) => {
+      inFlightRef.current += 1;
+      setIsPending(true);
+      try {
+        const result = await uploadPersonalDocument(file, onProgress);
+        queryClient.invalidateQueries({ queryKey: ['personal-documents'] });
+        return result;
+      } finally {
+        inFlightRef.current -= 1;
+        if (inFlightRef.current === 0) setIsPending(false);
+      }
     },
-  });
+    [queryClient]
+  );
+
+  return { upload, isPending };
 }
 
 // Hook to delete document

@@ -73,17 +73,20 @@ def _get_nlp():
     try:
         nlp = spacy.load(_SPACY_MODEL)
     except OSError:
-        logger.warning("spaCy model '%s' not found — downloading…", _SPACY_MODEL)
-        from spacy.cli import download as spacy_download
-        spacy_download(_SPACY_MODEL)
-        import spacy as _spacy
-        nlp = _spacy.load(_SPACY_MODEL)
+        logger.warning(
+            "spaCy model '%s' not found; using blank English pipeline with reduced quality.",
+            _SPACY_MODEL,
+        )
+        nlp = spacy.blank("en")
 
     # Increase max_length for large documents (default is 1 000 000)
     nlp.max_length = 2_000_000
 
     if "textrank" not in nlp.pipe_names:
-        nlp.add_pipe("textrank")
+        try:
+            nlp.add_pipe("textrank")
+        except Exception as exc:
+            logger.warning("pytextrank unavailable; skipping textrank extraction: %s", exc)
 
     _nlp = nlp
     logger.info("spaCy pipeline loaded: %s", nlp.pipe_names)
@@ -188,6 +191,9 @@ def _extract_textrank(doc) -> list[dict]:
 
     Returns list of dicts with rank-normalised scores.
     """
+    if not hasattr(doc._, "phrases"):
+        return []
+
     phrases = []
     max_rank = max((p.rank for p in doc._.phrases), default=1) or 1
 

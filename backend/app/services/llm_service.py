@@ -18,6 +18,22 @@ from app.core.config import settings
 from app.core.logging import logger
 
 
+def _resolve_gemini_model() -> str:
+    """Return a supported Gemini model name, normalizing deprecated aliases."""
+    configured = (settings.GEMINI_MODEL or "").strip()
+    normalized = configured.removeprefix("models/")
+    deprecated = {"gemini-2.0-flash"}
+    if normalized in deprecated:
+        fallback = "gemini-2.5-flash"
+        logger.warning(
+            "LLM[gemini] configured model '%s' is deprecated; using '%s' instead.",
+            configured,
+            fallback,
+        )
+        return fallback
+    return normalized or "gemini-2.5-flash"
+
+
 def call_llm(
     prompt: str,
     temperature: float = 0.7,
@@ -84,7 +100,7 @@ def current_model_name() -> str:
     """Return the model identifier string for the active provider (for logging/DB)."""
     provider = settings.LLM_PROVIDER.lower()
     if provider == "gemini":
-        return settings.GEMINI_MODEL
+        return _resolve_gemini_model()
     if provider == "ollama":
         return settings.OLLAMA_MODEL
     return settings.MISTRAL_CHAT_MODEL
@@ -103,6 +119,7 @@ def _call_gemini(
         raise ValueError("GEMINI_API_KEY is not configured.")
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model_name = _resolve_gemini_model()
     delay = settings.LLM_RETRY_DELAY
     last_exc: Exception | None = None
 
@@ -116,7 +133,7 @@ def _call_gemini(
     for attempt in range(1, settings.GEMINI_MAX_RETRIES + 1):
         try:
             response = client.models.generate_content(
-                model=settings.GEMINI_MODEL,
+                model=model_name,
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(**gen_config_kwargs),
             )

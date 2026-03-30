@@ -4,10 +4,10 @@ services/quiz_service.py
 Quiz generation pipeline:
   1. Load document chunks from Postgres
   2. Get top extracted concepts (spaCy/TextRank/TF-IDF) from Postgres
-  3. Build a structured Mistral prompt requesting JSON output
-  4. Call Mistral LLM (with retries)
+  3. Build a structured prompt requesting JSON output
+  4. Call LLM (Gemini by default, via llm_service.call_llm)
   5. Parse and structurally validate JSON response
-  6. LLM re-check: ask Mistral to verify each answer is correct
+  6. LLM re-check: verify each answer is correct
   7. Deduplicate questions (normalized text fingerprint)
   8. Persist Quiz + Questions + Answers to Postgres
   9. Update QuizJob status (completed / failed)
@@ -140,7 +140,7 @@ def _call_llm_json(prompt: str, temperature: float = 0.3) -> tuple[str, int, int
     return call_llm(
         _GENERATION_SYSTEM + "\n\n" + prompt,
         temperature=temperature,
-        max_tokens=4096,
+        max_tokens=8192,
         json_mode=True,
     )
 
@@ -149,13 +149,65 @@ def _call_llm_json(prompt: str, temperature: float = 0.3) -> tuple[str, int, int
 
 def _extract_json(text: str) -> dict:
     """
-    Extract JSON from Mistral response, stripping markdown code fences if present.
+    Extract JSON from LLM response.
+
+    Strategies (in order):
+    1. Strip markdown fences, then direct json.loads.
+    2. Skip leading non-JSON text (e.g. stray words before the first ``{``).
+    3. Recover from truncated responses by walking the text char-by-char to
+       collect every complete top-level question object inside the
+       ``"questions"`` array, then reassemble a valid dict.
     """
-    # Strip markdown fences
     text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text)
-    text = re.sub(r"\s*```$", "", text)
-    return json.loads(text.strip())
+    # Strip markdown fences (```json ... ``` or ``` ... ```)
+    text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\n?```\s*$", "", text)
+    text = text.strip()
+
+    # Strategy 1: direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        original_exc = exc
+
+    # Strategy 2: skip leading garbage before the first {
+    start = text.find("{")
+    if start > 0:
+        try:
+            return json.loads(text[start:])
+        except json.JSONDecodeError:
+            pass
+
+    # Strategy 3: recover truncated JSON — extract every complete question object
+    q_start = re.search(r'"questions"\s*:\s*\[', text)
+    if q_start:
+        fragment = text[q_start.end():]  # text after the opening [
+        questions: list[dict] = []
+        depth = 0
+        obj_start: int | None = None
+        for i, ch in enumerate(fragment):
+            if ch == "{":
+                if depth == 0:
+                    obj_start = i
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and obj_start is not None:
+                    try:
+                        questions.append(json.loads(fragment[obj_start : i + 1]))
+                    except json.JSONDecodeError:
+                        pass
+                    obj_start = None
+        if questions:
+            logger.warning(
+                "_extract_json: recovered %d question(s) from truncated/partial JSON",
+                len(questions),
+            )
+            return {"questions": questions}
+
+    raise ValueError(
+        f"Could not extract valid JSON from LLM response"
+    ) from original_exc
 
 
 # ── Structural validation ─────────────────────────────────────────────────────
@@ -217,7 +269,7 @@ def _recheck_answers(
     context: str,
 ) -> list[dict]:
     """
-    Ask Mistral to verify each answer is correct.
+    Ask the LLM to verify each answer is correct.
     Returns only the questions that pass validation.
     """
     if not questions:
@@ -376,12 +428,12 @@ def generate_quiz_task(
     db_url: str,
 ) -> dict:
     """
-    Celery task: generate a quiz from a document using Mistral.
+    Celery task: generate a quiz from a document using Gemini.
 
     Steps:
       1. Load document chunks from Postgres
       2. Get top concepts from Postgres
-      3. Generate questions via Mistral
+      3. Generate questions via LLM (Gemini)
       4. Parse + structurally validate
       5. LLM re-check answers
       6. Deduplicate
@@ -438,13 +490,14 @@ def generate_quiz_task(
         if not chunks:
             raise ValueError(f"Document {document_id} has no chunks — is it processed?")
 
-        # Build context: use up to 12 000 chars (same as RAG pipeline)
+        # Build context: cap at 6 000 chars to leave room for the JSON output
+        # (large contexts eat into the model's context window, truncating the response)
         context_parts: list[str] = []
         total_chars = 0
         for chunk in chunks:
             text = chunk.chunk_text.strip()
-            if total_chars + len(text) > 12000:
-                remaining = 12000 - total_chars
+            if total_chars + len(text) > 6000:
+                remaining = 6000 - total_chars
                 if remaining > 200:
                     context_parts.append(text[:remaining] + "…")
                 break
@@ -463,9 +516,10 @@ def generate_quiz_task(
 
         concepts_str = ", ".join(c.term for c in concept_rows) if concept_rows else "N/A"
 
-        # ── Step 4: Build prompt and call Mistral ──────────────────────────────
-        # Ask for more questions than needed to allow for filtering
-        target = min(num_questions + max(5, num_questions // 3), 50)
+        # ── Step 4: Build prompt and call LLM ────────────────────────────────
+        # Ask for slightly more than needed to allow for filtering, but cap at 20
+        # to keep the JSON output short enough to avoid truncation.
+        target = min(num_questions + max(3, num_questions // 4), 20)
 
         prompt = _GENERATION_PROMPT.format(
             context=context,
@@ -483,10 +537,10 @@ def generate_quiz_task(
         try:
             data = _extract_json(raw_text)
             raw_questions: list[dict[str, Any]] = data.get("questions", [])
-        except (json.JSONDecodeError, KeyError) as exc:
-            raise ValueError(f"Mistral returned invalid JSON: {exc}") from exc
+        except (json.JSONDecodeError, KeyError, ValueError) as exc:
+            raise ValueError(f"LLM returned invalid JSON: {exc}") from exc
 
-        logger.info("[Quiz] Mistral returned %d raw questions", len(raw_questions))
+        logger.info("[Quiz] LLM returned %d raw questions", len(raw_questions))
 
         # ── Step 6: Structural validation ─────────────────────────────────────
         valid_questions = [q for q in raw_questions if _validate_question(q)]

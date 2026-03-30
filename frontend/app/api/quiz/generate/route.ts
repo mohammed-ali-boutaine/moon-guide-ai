@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const backendUrl = () => process.env.BACKEND_URL || 'http://localhost:8000';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 /**
  * POST /api/quiz/generate – start async quiz generation job (proxy)
@@ -9,7 +8,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
 
-    const response = await fetch(`${backendUrl()}/api/quiz/generate`, {
+    const response = await fetch(`${resolveBackendBaseUrl()}/api/quiz/generate`, {
       method: 'POST',
       headers: {
         Cookie: request.headers.get('cookie') || '',

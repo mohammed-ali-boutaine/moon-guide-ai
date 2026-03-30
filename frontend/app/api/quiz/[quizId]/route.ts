@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const backendUrl = () => process.env.BACKEND_URL || 'http://localhost:8000';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 /**
  * GET  /api/quiz/[quizId] – fetch single quiz
@@ -13,7 +12,7 @@ export async function GET(
 ) {
   try {
     const { quizId } = await params;
-    const response = await fetch(`${backendUrl()}/api/quiz/${quizId}`, {
+    const response = await fetch(`${resolveBackendBaseUrl()}/api/quiz/${quizId}`, {
       method: 'GET',
       headers: {
         Cookie: request.headers.get('cookie') || '',
@@ -39,7 +38,7 @@ export async function PATCH(
     const { quizId } = await params;
     const body = await request.text();
 
-    const response = await fetch(`${backendUrl()}/api/quiz/${quizId}`, {
+    const response = await fetch(`${resolveBackendBaseUrl()}/api/quiz/${quizId}`, {
       method: 'PATCH',
       headers: {
         Cookie: request.headers.get('cookie') || '',

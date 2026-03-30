@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const backendUrl = () => process.env.BACKEND_URL || 'http://localhost:8000';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 /**
  * POST /api/career/predict – proxy career prediction to backend
@@ -9,7 +8,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
 
-    const response = await fetch(`${backendUrl()}/api/career/predict`, {
+    const response = await fetch(`${resolveBackendBaseUrl()}/api/career/predict`, {
       method: 'POST',
       headers: {
         Cookie: request.headers.get('cookie') || '',

@@ -45,7 +45,7 @@ _CHAT_RATE_LIMIT_WINDOW = 60
 router = APIRouter(prefix="/chat", tags=["Chat / RAG"])
 
 
-def _rate_limit_chat(current_user) -> None:
+def _rate_limit_chat(current_user: CurrentUser) -> None:
     """Per-user Redis rate limiter for chat endpoints."""
     key = f"rl:chat:{current_user.id}"
     try:

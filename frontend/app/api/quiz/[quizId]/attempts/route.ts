@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const backendUrl = () => process.env.BACKEND_URL || 'http://localhost:8000';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 /**
  * GET /api/quiz/[quizId]/attempts – list attempts for a quiz (proxy)
@@ -12,7 +11,7 @@ export async function GET(
   try {
     const { quizId } = await params;
 
-    const response = await fetch(`${backendUrl()}/api/quiz/${quizId}/attempts`, {
+    const response = await fetch(`${resolveBackendBaseUrl()}/api/quiz/${quizId}/attempts`, {
       method: 'GET',
       headers: {
         Cookie: request.headers.get('cookie') || '',

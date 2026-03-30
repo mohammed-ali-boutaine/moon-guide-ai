@@ -343,7 +343,7 @@ function QuizAttemptContent() {
 
     async function start() {
       try {
-        const res = await fetch(`${API_URL}/api/v1/quiz/${quizId}/start`, {
+        const res = await fetch(`${API_URL}/api/quiz/${quizId}/start`, {
           method: 'POST',
           ...FETCH_OPTS,
         });
@@ -426,7 +426,7 @@ function QuizAttemptContent() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_URL}/api/v1/quiz/${attemptId}/submit`, {
+      const res = await fetch(`${API_URL}/api/quiz/${attemptId}/submit`, {
         method: 'POST',
         ...FETCH_OPTS,
         body: JSON.stringify({ answers: payload }),

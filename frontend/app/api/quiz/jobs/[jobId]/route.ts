@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const backendUrl = () => process.env.BACKEND_URL || 'http://localhost:8000';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 /**
  * GET /api/quiz/jobs/[jobId] – poll quiz generation job status (proxy)
@@ -12,7 +11,7 @@ export async function GET(
   try {
     const { jobId } = await params;
 
-    const response = await fetch(`${backendUrl()}/api/quiz/jobs/${jobId}`, {
+    const response = await fetch(`${resolveBackendBaseUrl()}/api/quiz/jobs/${jobId}`, {
       method: 'GET',
       headers: {
         Cookie: request.headers.get('cookie') || '',

@@ -60,7 +60,7 @@ function UploadDocModal({ classId, onClose }: { classId: string; onClose: () => 
   const [progress, setProgress] = useState<number | null>(null);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const uploadMutation = useUploadClassDocument(classId);
+  const { upload, isPending } = useUploadClassDocument(classId);
 
   async function handleSubmit() {
     const file = fileRef.current?.files?.[0];
@@ -68,7 +68,7 @@ function UploadDocModal({ classId, onClose }: { classId: string; onClose: () => 
     setError(null);
     setProgress(0);
     try {
-      await uploadMutation.mutateAsync({ file, onProgress: setProgress });
+      await upload(file, setProgress);
       setDone(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
@@ -113,10 +113,10 @@ function UploadDocModal({ classId, onClose }: { classId: string; onClose: () => 
             <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">Cancel</button>
             <button
               onClick={handleSubmit}
-              disabled={uploadMutation.isPending}
+              disabled={isPending}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
+              {isPending ? 'Uploading...' : 'Upload'}
             </button>
           </div>
         </>

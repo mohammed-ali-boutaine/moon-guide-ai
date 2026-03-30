@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 // ── Route definitions ────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ export async function middleware(request: NextRequest) {
   // Proxy other /api/ requests to the backend (keep existing behaviour).
   // Use BACKEND_URL (server-side reachable) with NEXT_PUBLIC_API_URL as fallback.
   if (pathname.startsWith('/api/')) {
-    const apiUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = resolveBackendBaseUrl();
     const url = request.nextUrl.clone();
     const parsed = new URL(apiUrl);
     url.host = parsed.host;

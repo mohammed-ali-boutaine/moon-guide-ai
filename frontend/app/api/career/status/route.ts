@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const backendUrl = () => process.env.BACKEND_URL || 'http://localhost:8000';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 /**
  * GET /api/career/status – check if career model is available
  */
 export async function GET(request: NextRequest) {
   try {
-    const response = await fetch(`${backendUrl()}/api/career/status`, {
+    const response = await fetch(`${resolveBackendBaseUrl()}/api/career/status`, {
       method: 'GET',
       headers: {
         Cookie: request.headers.get('cookie') || '',

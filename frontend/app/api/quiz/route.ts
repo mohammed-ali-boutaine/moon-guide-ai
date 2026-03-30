@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const backendUrl = () => process.env.BACKEND_URL || 'http://localhost:8000';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 /**
  * GET /api/quiz  – list teacher quizzes (proxy)
@@ -14,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const qs = searchParams.toString();
-    const url = `${backendUrl()}/api/quiz${qs ? `?${qs}` : ''}`;
+    const url = `${resolveBackendBaseUrl()}/api/quiz${qs ? `?${qs}` : ''}`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -38,7 +37,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
 
-    const response = await fetch(`${backendUrl()}/api/quiz`, {
+    const response = await fetch(`${resolveBackendBaseUrl()}/api/quiz`, {
       method: 'POST',
       headers: {
         Cookie: request.headers.get('cookie') || '',

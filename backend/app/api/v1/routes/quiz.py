@@ -419,9 +419,25 @@ def get_quiz(
         )
     )
     if job is None:
-        # Teachers can also view quizzes for their class documents
         is_teacher = current_user.role and current_user.role.name == RoleName.TEACHER
-        if not is_teacher:
+        is_student = current_user.role and current_user.role.name == RoleName.STUDENT
+        if is_student:
+            # Allow if the quiz is assigned to a class the student is enrolled in
+            assignment = db.scalar(
+                select(QuizAssignment)
+                .join(ClassStudent, ClassStudent.class_id == QuizAssignment.class_id)
+                .where(
+                    QuizAssignment.quiz_id == quiz_id,
+                    QuizAssignment.status == AssignmentStatus.active,
+                    ClassStudent.student_id == current_user.id,
+                )
+            )
+            if assignment is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have access to this quiz.",
+                )
+        elif not is_teacher:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have access to this quiz.",
@@ -780,6 +796,8 @@ def assign_quiz(
         existing.status = AssignmentStatus.active
         existing.due_date = body.due_date
         existing.assigned_by_id = current_user.id
+        if quiz.status == QuizStatus.draft:
+            quiz.status = QuizStatus.published
         db.commit()
         db.refresh(existing)
         logger.info(
@@ -787,6 +805,10 @@ def assign_quiz(
             quiz_id, body.class_id, current_user.email,
         )
         return QuizAssignmentResponse.model_validate(existing)
+
+    # Auto-publish the quiz so students can start it immediately
+    if quiz.status == QuizStatus.draft:
+        quiz.status = QuizStatus.published
 
     # Create assignment
     assignment = QuizAssignment(

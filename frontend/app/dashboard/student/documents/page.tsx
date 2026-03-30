@@ -38,70 +38,57 @@ export default function StudentDocumentsPage() {
   }, [documentsData]);
 
   // Mutations
-  const uploadMutation = useUploadPersonalDocument();
+  const { upload, isPending: isUploadPending } = useUploadPersonalDocument();
   const deleteMutation = useDeleteDocument();
 
   const handleUpload = useCallback(
     async (files: File[]) => {
-      // Initialize upload progress for each file
-      const newUploads: UploadProgress[] = files.map((file) => ({
-        file,
-        progress: 0,
-        status: 'uploading',
-      }));
+      let baseIndex = 0;
+      setUploads((prev) => {
+        baseIndex = prev.length;
+        const newUploads: UploadProgress[] = files.map((file) => ({
+          fileName: file.name,
+          fileSize: file.size,
+          progress: 0,
+          status: 'uploading',
+        }));
+        return [...prev, ...newUploads];
+      });
 
-      setUploads((prev) => [...prev, ...newUploads]);
-
-      // Upload each file
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const uploadIndex = uploads.length + i;
+        const uploadIndex = baseIndex + i;
 
         try {
-          await uploadMutation.mutateAsync(
-            {
-              file,
-              onProgress: (progress) => {
-                setUploads((prev) =>
-                  prev.map((u, idx) =>
-                    idx === uploadIndex ? { ...u, progress } : u
-                  )
-                );
-              },
-            },
-            {
-              onSuccess: (data) => {
-                setUploads((prev) =>
-                  prev.map((u, idx) =>
-                    idx === uploadIndex
-                      ? {
-                          ...u,
-                          status: data.status === 'processing' ? 'processing' : 'completed',
-                          documentId: data.document_id,
-                        }
-                      : u
-                  )
-                );
-                showSuccess(`"${file.name}" uploaded successfully`);
-              },
-              onError: (error) => {
-                setUploads((prev) =>
-                  prev.map((u, idx) =>
-                    idx === uploadIndex
-                      ? { ...u, status: 'error', error: error.message }
-                      : u
-                  )
-                );
-                showError(`Failed to upload "${file.name}": ${error.message}`);
-              },
-            }
+          const data = await upload(file, (progress) => {
+            setUploads((prev) =>
+              prev.map((u, idx) => (idx === uploadIndex ? { ...u, progress } : u))
+            );
+          });
+          setUploads((prev) =>
+            prev.map((u, idx) =>
+              idx === uploadIndex
+                ? {
+                    ...u,
+                    status: data.status === 'processing' ? 'processing' : 'completed',
+                    documentId: data.document_id,
+                  }
+                : u
+            )
           );
-        } catch (error) {
-          // Error handled in onError callback
+          showSuccess(`"${file.name}" uploaded successfully`);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Upload failed';
+          setUploads((prev) =>
+            prev.map((u, idx) =>
+              idx === uploadIndex ? { ...u, status: 'error', error: message } : u
+            )
+          );
+          showError(`Failed to upload "${file.name}": ${message}`);
         }
       }
     },
-    [uploadMutation, showError, showSuccess, uploads.length]
+    [upload, showError, showSuccess]
   );
 
   const handleDelete = useCallback(
@@ -173,7 +160,7 @@ export default function StudentDocumentsPage() {
             <DocumentUpload
               onUpload={handleUpload}
               uploads={uploads}
-              disabled={uploadMutation.isPending}
+              disabled={isUploadPending}
             />
           </div>
 

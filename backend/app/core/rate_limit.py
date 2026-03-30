@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, status
 
+from app.core.dependencies import CurrentUser
 from app.core.logging import logger
 from app.redis_client import redis_client
 
@@ -29,7 +30,7 @@ class RateLimiter:
         self.max_requests = max_requests
         self.window_seconds = window_seconds
 
-    def __call__(self, current_user) -> None:
+    def __call__(self, current_user: CurrentUser) -> None:
         key = f"rl:{self.name}:{current_user.id}"
         try:
             count = redis_client.incr(key)

@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.v1.api import api_router
 from app.core.config import settings
@@ -82,8 +81,40 @@ def health_check():
 # Mount all v1 routes
 app.include_router(api_router)
 
+_prometheus_instrumentation_mounted = False
+
 if settings.PROMETHEUS_METRICS_ENABLED:
-    Instrumentator(
-        excluded_handlers=["/health", "/metrics"],
-    ).instrument(app).expose(app, include_in_schema=False)
+    try:
+        from prometheus_fastapi_instrumentator import Instrumentator
+    except ImportError:
+        logger.warning(
+            "PROMETHEUS_METRICS_ENABLED but prometheus-fastapi-instrumentator is not "
+            "installed; rebuild the backend image (pip install -r requirements.txt) to enable /metrics"
+        )
+    else:
+        Instrumentator(
+            excluded_handlers=["/health", "/metrics"],
+        ).instrument(app).expose(app, include_in_schema=False)
+        _prometheus_instrumentation_mounted = True
+
+if not _prometheus_instrumentation_mounted:
+    from fastapi.responses import PlainTextResponse
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics_minimal():
+        """
+        Avoid 404 on Prometheus scrapes when PROMETHEUS_METRICS_ENABLED is false or
+        prometheus-fastapi-instrumentator is missing. Full HTTP metrics require the
+        dependency and PROMETHEUS_METRICS_ENABLED=true.
+        """
+        body = (
+            "# HELP moon_guide_prometheus_instrumentation_active "
+            "1 if prometheus-fastapi-instrumentator is serving request metrics.\n"
+            "# TYPE moon_guide_prometheus_instrumentation_active gauge\n"
+            "moon_guide_prometheus_instrumentation_active 0\n"
+        )
+        return PlainTextResponse(
+            body,
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
 

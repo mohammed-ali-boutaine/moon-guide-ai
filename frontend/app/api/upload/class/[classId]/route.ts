@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveBackendBaseUrl } from '@/lib/server-backend-url';
 
 /**
  * API proxy: POST /api/upload/class/[classId]
@@ -12,9 +13,7 @@ export async function POST(
   try {
     const { classId } = await params;
 
-    // BACKEND_URL env var for flexibility: Docker uses 'http://backend:8000',
-    // local dev without Docker falls back to 'http://localhost:8000'
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = resolveBackendBaseUrl();
     const targetUrl = `${backendUrl}/api/classes/${classId}/documents`;
 
     console.log('[upload/class] classId:', classId);
