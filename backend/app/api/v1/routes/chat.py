@@ -26,7 +26,7 @@ from app.core.logging import logger
 from app.models.chat_message import ChatMessage, ChatRole
 from app.models.chat_session import ChatSession
 from app.models.document import Document
-from app.core.rate_limit import RateLimiter
+from app.redis_client import redis_client
 from app.schemas.chat import (
     ChatRequest,
     ChatResponse,
@@ -39,10 +39,34 @@ from app.schemas.chat import (
 from app.services.rag_service import run_rag_pipeline
 
 _RAG_TIMEOUT = 30.0     # seconds
+_CHAT_RATE_LIMIT_MAX = 10
+_CHAT_RATE_LIMIT_WINDOW = 60
 
 router = APIRouter(prefix="/chat", tags=["Chat / RAG"])
 
-_rate_limit_chat = RateLimiter("chat", max_requests=10, window_seconds=60)
+
+def _rate_limit_chat(current_user) -> None:
+    """Per-user Redis rate limiter for chat endpoints."""
+    key = f"rl:chat:{current_user.id}"
+    try:
+        count = redis_client.incr(key)
+        if count == 1:
+            redis_client.expire(key, _CHAT_RATE_LIMIT_WINDOW)
+        if count > _CHAT_RATE_LIMIT_MAX:
+            ttl = max(redis_client.ttl(key), 1)
+            logger.warning(
+                "Rate limit hit: user=%s endpoint=chat count=%d limit=%d",
+                current_user.id, count, _CHAT_RATE_LIMIT_MAX,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate limit exceeded. Try again in {ttl}s.",
+                headers={"Retry-After": str(ttl)},
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Rate limiter Redis error: %s", exc)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

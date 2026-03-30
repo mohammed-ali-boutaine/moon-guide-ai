@@ -19,6 +19,11 @@ import re
 import hashlib
 from typing import Any
 
+try:
+    import redis
+except ImportError:
+    redis = None  # type: ignore[assignment]
+
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -96,8 +101,7 @@ def _redis_key(document_id: int) -> str:
 def _get_cached_concepts(document_id: int) -> list[dict] | None:
     """Return cached concept list or None on miss / error."""
     try:
-        import redis as redis_lib
-        r = redis_lib.from_url(settings.REDIS_URL)
+        r = redis.from_url(settings.REDIS_URL)
         raw = r.get(_redis_key(document_id))
         if raw:
             logger.debug("Cache HIT for concepts doc=%d", document_id)
@@ -110,8 +114,7 @@ def _get_cached_concepts(document_id: int) -> list[dict] | None:
 def _set_cached_concepts(document_id: int, concepts: list[dict]) -> None:
     """Store concept list in Redis. Silently swallow errors."""
     try:
-        import redis as redis_lib
-        r = redis_lib.from_url(settings.REDIS_URL)
+        r = redis.from_url(settings.REDIS_URL)
         r.setex(_redis_key(document_id), _REDIS_TTL_SECONDS, json.dumps(concepts))
         logger.debug("Cached %d concepts for doc=%d", len(concepts), document_id)
     except Exception as exc:
@@ -121,8 +124,7 @@ def _set_cached_concepts(document_id: int, concepts: list[dict]) -> None:
 def invalidate_concept_cache(document_id: int) -> None:
     """Delete the concept cache for a document (call on re-processing)."""
     try:
-        import redis as redis_lib
-        r = redis_lib.from_url(settings.REDIS_URL)
+        r = redis.from_url(settings.REDIS_URL)
         r.delete(_redis_key(document_id))
     except Exception as exc:
         logger.warning("Redis delete failed for concepts doc=%d: %s", document_id, exc)
@@ -242,14 +244,20 @@ def _compute_tfidf(chunks: list[str]) -> dict[str, float]:
         return {}
 
     feature_names: list[str] = vectorizer.get_feature_names_out().tolist()
-    # Take the max TF-IDF score of each term across all chunks
-    scores: list[float] = np.asarray(matrix.max(axis=0)).flatten().tolist()
+    # Take the max TF-IDF score of each term across all chunks.
+    # Explicitly call toarray() in case max() returns a sparse matrix in newer scipy.
+    max_result = matrix.max(axis=0)
+    if hasattr(max_result, 'toarray'):
+        scores_flat = max_result.toarray().flatten()
+    else:
+        scores_flat = np.asarray(max_result).flatten()
+    scores: list[float] = scores_flat.tolist()
 
     max_score = max(scores) if scores else 1.0
     return {
-        term: round(score / max_score, 4)
+        term: round(float(score) / max_score, 4)
         for term, score in zip(feature_names, scores)
-        if score > 0
+        if float(score) > 0
     }
 
 

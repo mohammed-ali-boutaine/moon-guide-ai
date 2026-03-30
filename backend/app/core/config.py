@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     
     # Environment
     ENV: str = "development"
+
+    # Prometheus metrics (/metrics); disable if you do not want the endpoint exposed
+    PROMETHEUS_METRICS_ENABLED: bool = True
     
     # Google SSO
     GOOGLE_CLIENT_SECRET: str = ""

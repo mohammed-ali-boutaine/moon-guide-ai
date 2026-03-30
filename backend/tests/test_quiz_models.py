@@ -614,21 +614,18 @@ class TestExtractConceptsTask:
     @patch("app.services.document_service.extract_and_store_concepts")
     def test_extract_concepts_task_calls_service(self, mock_extract):
         """extract_concepts_task should delegate to concept_service."""
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-
         mock_extract.return_value = [{"term": "Python", "score": 0.9}]
 
-        # Call the underlying function directly (bypass Celery)
-        from app.services.concept_service import extract_and_store_concepts
+        from app.services import document_service
         db = MagicMock()
-        result = extract_and_store_concepts(
+        result = document_service.extract_and_store_concepts(
             document_id=1,
             chunks=["Python is great for machine learning."],
             db=db,
         )
-        # The mock returns our payload
+
         mock_extract.assert_called_once()
+        assert result == [{"term": "Python", "score": 0.9}]
 
     @patch("app.services.concept_service._get_cached_concepts", return_value=None)
     @patch("app.services.concept_service._set_cached_concepts")

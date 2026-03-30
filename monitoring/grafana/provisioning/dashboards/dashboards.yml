@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: Moon Guide
+    orgId: 1
+    folder: Moon Guide
+    type: file
+    disableDeletion: false
+    options:
+      path: /var/lib/grafana/dashboards

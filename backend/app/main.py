@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.v1.api import api_router
 from app.core.config import settings
@@ -80,4 +81,9 @@ def health_check():
 
 # Mount all v1 routes
 app.include_router(api_router)
+
+if settings.PROMETHEUS_METRICS_ENABLED:
+    Instrumentator(
+        excluded_handlers=["/health", "/metrics"],
+    ).instrument(app).expose(app, include_in_schema=False)
 

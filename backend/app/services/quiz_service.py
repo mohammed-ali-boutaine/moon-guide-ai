@@ -21,6 +21,9 @@ import re
 import uuid
 from typing import Any
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from app.celery_app import celery
 from app.core.config import settings
 from app.core.logging import logger
@@ -392,8 +395,7 @@ def generate_quiz_task(
         difficulty:    "easy" | "medium" | "hard".
         db_url:        SQLAlchemy database URL.
     """
-    from sqlalchemy import create_engine, select
-    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy import select
 
     from app.models.document import Document
     from app.models.document_chunk import DocumentChunk
@@ -596,8 +598,7 @@ def correct_quiz_attempt_task(self, attempt_id: int, db_url: str) -> dict:
 
     Note: email confirmation is a future feature (no email provider configured yet).
     """
-    from sqlalchemy import create_engine, select
-    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy import select
 
     from app.models.answer import Answer
     from app.models.notification import Notification

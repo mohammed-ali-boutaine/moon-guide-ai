@@ -16,13 +16,15 @@ from typing import Optional
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from fastapi import HTTPException, UploadFile, BackgroundTasks
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.celery_app import celery
 from app.core.config import settings
 from app.core.logging import logger
 from app.models.document import Document, ScopeEnum, StatusEnum, RoleEnum, FileTypeEnum
 from app.models.document_chunk import DocumentChunk
+from app.services.concept_service import extract_and_store_concepts
 
 # -- Constants
 
@@ -255,8 +257,12 @@ def _extract_text_from_file(file_path: str, file_type: str) -> str:
         Extracted text string.
     """
     # file_path may be a URL path like /static/uploads/... (stored in DB relative to WORKDIR).
-    # Strip the leading "/" so os.path.abspath resolves it from CWD (/app in Docker).
-    abs_path = os.path.abspath(file_path.lstrip("/"))
+    # For real filesystem absolute paths (e.g. in tests), use them directly.
+    # For URL-style paths, strip the leading "/" so os.path.abspath resolves from CWD (/app in Docker).
+    if os.path.isabs(file_path) and os.path.exists(file_path):
+        abs_path = file_path
+    else:
+        abs_path = os.path.abspath(file_path.lstrip("/"))
     
     logger.info("Extracting text from %s (type=%s)", abs_path, file_type)
 
@@ -366,9 +372,6 @@ def extract_and_embed(self, document_id: int, file_path: str, file_type: str, db
     Returns:
         Dict with chunks_count and vectors_count.
     """
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
     engine = create_engine(str(db_url))
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = SessionLocal()
@@ -517,11 +520,6 @@ def extract_concepts_task(self, document_id: int, chunk_texts: list[str], db_url
     Returns:
         Dict with concepts_count.
     """
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    from app.services.concept_service import extract_and_store_concepts
-
     engine = create_engine(str(db_url))
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = SessionLocal()

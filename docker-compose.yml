@@ -151,10 +151,48 @@ services:
       - moon-guide-network
     command: npm run dev
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: moon-guide-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - backend
+    networks:
+      - moon-guide-network
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: moon-guide-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001}
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - moon-guide-network
+
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   moon-guide-network:

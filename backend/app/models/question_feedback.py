@@ -4,8 +4,8 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, Text, UniqueConstraint
+from sqlalchemy import Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -32,7 +32,7 @@ class QuestionFeedback(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     attempt_id: Mapped[int] = mapped_column(
         Integer,
