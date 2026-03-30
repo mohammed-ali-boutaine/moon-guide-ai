@@ -161,7 +161,7 @@ def record_review(
             interval = 6
         else:
             interval = round(prev_interval * ef)
-        reps += 1
+        reps += 1test_class_student
 
     # Update ease factor (clamped to [1.3, ∞))
     ef = max(1.3, ef + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))

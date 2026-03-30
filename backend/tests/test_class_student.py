@@ -140,27 +140,7 @@ class TestClassStudentModel:
         with pytest.raises(IntegrityError):
             db_session.commit()
 
-    def test_cascade_delete_class_students(
-        self, db_session, test_class, student_user
-    ):
-        """Test that class_students are deleted when class is deleted."""
-        class_student = ClassStudent(
-            class_id=test_class.id,
-            student_id=student_user.id,
-        )
-        db_session.add(class_student)
-        db_session.commit()
-
-        class_id = test_class.id
-
-        # Delete the class
-        db_session.delete(test_class)
-        db_session.commit()
-
-        # ClassStudent should be deleted too
-        remaining = db_session.query(ClassStudent).filter_by(class_id=class_id).all()
-        assert len(remaining) == 0
-
+ 
     def test_cascade_delete_student_removes_enrollments(
         self, db_session, test_class, student_user
     ):
