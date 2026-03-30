@@ -49,9 +49,10 @@ jobs:
     # Environment Variables
     # These are shared by all steps
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moon_guide
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moon_guide_test
-      SYSTEM_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      # 127.0.0.1 avoids IPv6 localhost resolution issues on some runners
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/moon_guide
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/moon_guide_test
+      SYSTEM_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
       SECRET_KEY: ci-test-secret-key-change-in-production-min-32-chars
       ALGORITHM: HS256
       REDIS_URL: redis://localhost:6379/0

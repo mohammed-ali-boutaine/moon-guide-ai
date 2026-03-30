@@ -3,8 +3,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AttemptResultResponse } from '@/types/quiz';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
 const FETCH_OPTS: RequestInit = {
   credentials: 'include',
   headers: { 'Content-Type': 'application/json' },
@@ -13,7 +11,7 @@ const FETCH_OPTS: RequestInit = {
 // ── API functions ─────────────────────────────────────────────────────────────
 
 async function fetchAttemptResults(attemptId: number): Promise<AttemptResultResponse> {
-  const res = await fetch(`${API_URL}/api/quiz/${attemptId}/results`, FETCH_OPTS);
+  const res = await fetch(`/api/quiz/${attemptId}/results`, FETCH_OPTS);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to load results');
@@ -22,7 +20,7 @@ async function fetchAttemptResults(attemptId: number): Promise<AttemptResultResp
 }
 
 async function requestFeedback(attemptId: number): Promise<void> {
-  const res = await fetch(`${API_URL}/api/quiz/${attemptId}/generate-feedback`, {
+  const res = await fetch(`/api/quiz/${attemptId}/generate-feedback`, {
     method: 'POST',
     ...FETCH_OPTS,
   });

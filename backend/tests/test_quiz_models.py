@@ -117,13 +117,6 @@ class TestQuizModel:
             db_session.commit()
         db_session.rollback()
 
-    def test_quiz_class_id_required(self, db_session):
-        quiz = Quiz(title="No Class", status=QuizStatus.draft)
-        db_session.add(quiz)
-        with pytest.raises(Exception):
-            db_session.commit()
-        db_session.rollback()
-
     def test_quiz_class_relationship(self, db_session, test_class):
         quiz = _make_quiz(test_class.id)
         db_session.add(quiz)

@@ -4,6 +4,8 @@ import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useAuth } from '@/contexts/auth-context';
 import { LoadingSpinner } from '@/components/ui';
 import { useStudentClasses } from '@/hooks/use-classes';
+import { useStudentAssignedQuizzes } from '@/hooks/use-quiz';
+import { usePersonalDocuments } from '@/hooks/use-documents';
 import Link from 'next/link';
 import { BookIcon, QuizIcon, DocumentIcon, BriefcaseIcon, UserIcon, CheckCircleIcon } from '@/components/ui/icons';
 
@@ -11,12 +13,31 @@ function StudentDashboardContent() {
   const { user } = useAuth();
 
   const { data: classesData, isLoading } = useStudentClasses(1, 4);
+  const { data: quizzesData, isLoading: isLoadingQuizzes } = useStudentAssignedQuizzes();
+  const { data: documentsData, isLoading: isLoadingDocs } = usePersonalDocuments();
+
+  const quizzes = quizzesData ?? [];
+  const completedQuizzes = quizzes.filter((quiz) => quiz.attempt_status === 'submitted').length;
+  const pendingQuizzes = quizzes.length - completedQuizzes;
+  const totalDocuments = documentsData?.total ?? 0;
+  const progressPercent = quizzes.length > 0 ? Math.round((completedQuizzes / quizzes.length) * 100) : 0;
+
+  const recentAssignedQuizzes = [...quizzes]
+    .sort((a, b) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime())
+    .slice(0, 3);
+
+  const upcomingDeadlines = [...quizzes]
+    .filter((quiz) => quiz.attempt_status !== 'submitted' && quiz.due_date)
+    .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime())
+    .slice(0, 3);
+
+  const isLoadingStats = isLoading || isLoadingQuizzes || isLoadingDocs;
 
   const stats = [
     { label: 'My Classes', value: classesData?.total.toString() || '0', icon: <BookIcon className="w-8 h-8" />, color: 'blue' },
-    { label: 'Pending Quizzes', value: '0', icon: <QuizIcon className="w-8 h-8" />, color: 'yellow' },
-    { label: 'Completed Quizzes', value: '0', icon: <CheckCircleIcon className="w-8 h-8" />, color: 'green' },
-    { label: 'Documents', value: '0', icon: <DocumentIcon className="w-8 h-8" />, color: 'purple' },
+    { label: 'Pending Quizzes', value: pendingQuizzes.toString(), icon: <QuizIcon className="w-8 h-8" />, color: 'yellow' },
+    { label: 'Completed Quizzes', value: completedQuizzes.toString(), icon: <CheckCircleIcon className="w-8 h-8" />, color: 'green' },
+    { label: 'Documents', value: totalDocuments.toString(), icon: <DocumentIcon className="w-8 h-8" />, color: 'purple' },
   ];
 
   const quickActions = [
@@ -24,7 +45,6 @@ function StudentDashboardContent() {
     { href: '/dashboard/student/quizzes', label: 'Quizzes', icon: <QuizIcon className="w-8 h-8" />, color: 'green' },
     { href: '/dashboard/student/documents', label: 'Documents', icon: <DocumentIcon className="w-8 h-8" />, color: 'yellow' },
     { href: '/dashboard/student/career', label: 'Career Planning', icon: <BriefcaseIcon className="w-8 h-8" />, color: 'purple' },
-    { href: '/dashboard/student/study', label: 'Study Materials', icon: <BookIcon className="w-8 h-8" />, color: 'indigo' },
     { href: '/me', label: 'My Profile', icon: <UserIcon className="w-8 h-8" />, color: 'gray' },
   ];
 
@@ -57,7 +77,7 @@ function StudentDashboardContent() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-400">{stat.label}</p>
-                      <p className="text-3xl font-bold text-gray-100 mt-1">{stat.value}</p>
+                      <p className="text-3xl font-bold text-gray-100 mt-1">{isLoadingStats ? '...' : stat.value}</p>
                     </div>
                     <div className="text-gray-600">{stat.icon}</div>
                   </div>
@@ -153,56 +173,77 @@ function StudentDashboardContent() {
                     )}
                   </div>
                 </div>
+
+                {/* Recently Assigned Quizzes */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl">
+                  <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                    <h2 className="text-lg font-semibold text-gray-100">Recently Assigned Quizzes</h2>
+                    <Link href="/dashboard/student/quizzes" className="text-sm text-primary-400 hover:text-primary-300">
+                      View All
+                    </Link>
+                  </div>
+                  <div className="p-6">
+                    {isLoadingQuizzes ? (
+                      <div className="flex justify-center py-8">
+                        <LoadingSpinner />
+                      </div>
+                    ) : recentAssignedQuizzes.length > 0 ? (
+                      <div className="space-y-3">
+                        {recentAssignedQuizzes.map((quiz) => (
+                          <Link
+                            key={quiz.assignment_id}
+                            href={`/dashboard/student/quizzes/${quiz.quiz.id}`}
+                            className="block p-4 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors border border-gray-700 hover:border-primary-600"
+                          >
+                            <h3 className="font-semibold text-white mb-1">{quiz.quiz.title}</h3>
+                            <p className="text-xs text-gray-500">
+                              {quiz.class_name}
+                              {quiz.due_date && <> &middot; Due {new Date(quiz.due_date).toLocaleDateString()}</>}
+                            </p>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500 text-sm">No quizzes assigned yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Sidebar */}
               <div className="space-y-8">
-                {/* Classmates (dump data) */}
+                {/* Upcoming Deadlines */}
                 <div className="bg-gray-900 border border-gray-800 rounded-xl">
                   <div className="px-6 py-4 border-b border-gray-800">
-                    <h2 className="text-lg font-semibold text-gray-100">Classmates</h2>
-                  </div>
-                  <div className="p-6 space-y-3">
-                    {[
-                      { name: 'Alice Martin', email: 'alice@example.com' },
-                      { name: 'Bob Dupont', email: 'bob@example.com' },
-                      { name: 'Caroline Bernard', email: 'caroline@example.com' },
-                    ].map((c, i) => (
-                      <div key={i} className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white font-medium text-sm">
-                            {c.name.split(' ').map(n => n[0]).join('')}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-200">{c.name}</p>
-                            <p className="text-xs text-gray-500">{c.email}</p>
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-400">• Online</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Upcoming Assignments */}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl">
-                  <div className="px-6 py-4 border-b border-gray-800">
-                    <h2 className="text-lg font-semibold text-gray-100">Upcoming</h2>
+                    <h2 className="text-lg font-semibold text-gray-100">Upcoming Deadlines</h2>
                   </div>
                   <div className="p-6">
-                    <div className="text-center py-8">
-                      <div className="inline-flex items-center justify-center w-12 h-12 bg-gray-800 rounded-full mb-3">
-                        <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                          />
-                        </svg>
+                    {isLoadingQuizzes ? (
+                      <div className="flex justify-center py-8">
+                        <LoadingSpinner />
                       </div>
-                      <p className="text-gray-500 text-sm">No upcoming assignments</p>
-                    </div>
+                    ) : upcomingDeadlines.length > 0 ? (
+                      <div className="space-y-3">
+                        {upcomingDeadlines.map((quiz) => (
+                          <Link
+                            key={quiz.assignment_id}
+                            href={`/dashboard/student/quizzes/${quiz.quiz.id}`}
+                            className="block p-3 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors"
+                          >
+                            <p className="text-sm font-medium text-gray-200">{quiz.quiz.title}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Due {new Date(quiz.due_date!).toLocaleDateString()} &middot; {quiz.class_name}
+                            </p>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500 text-sm">No upcoming deadlines</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -215,15 +256,17 @@ function StudentDashboardContent() {
                     <div>
                       <div className="flex justify-between text-sm mb-2">
                         <span className="text-gray-400">Overall Progress</span>
-                        <span className="text-primary-400 font-medium">0%</span>
+                        <span className="text-primary-400 font-medium">{isLoadingQuizzes ? '...' : `${progressPercent}%`}</span>
                       </div>
                       <div className="w-full bg-gray-800 rounded-full h-2">
-                        <div className="bg-primary-600 h-2 rounded-full" style={{ width: '0%' }}></div>
+                        <div className="bg-primary-600 h-2 rounded-full" style={{ width: `${progressPercent}%` }}></div>
                       </div>
                     </div>
                     <div className="pt-4 border-t border-gray-800">
                       <p className="text-xs text-gray-500 text-center">
-                        Start taking quizzes to track your progress
+                        {quizzes.length > 0
+                          ? `${completedQuizzes} of ${quizzes.length} assigned quizzes completed`
+                          : 'Start taking quizzes to track your progress'}
                       </p>
                     </div>
                   </div>

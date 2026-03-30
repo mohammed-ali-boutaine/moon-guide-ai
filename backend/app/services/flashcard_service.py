@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -118,7 +119,7 @@ _QUALITY_MAP = {0: 1, 1: 3, 2: 4, 3: 5}
 
 
 def record_review(
-    user_id: int,
+    user_id: uuid.UUID,
     flashcard_id: int,
     rating: int,  # 0=Again 1=Hard 2=Good 3=Easy
     db: DBSession,
@@ -135,12 +136,19 @@ def record_review(
         progress = FlashcardProgress(
             user_id=user_id,
             flashcard_id=flashcard_id,
+            ease_factor=2.5,
+            interval_days=1,
+            repetitions=0,
         )
         db.add(progress)
 
     q = _QUALITY_MAP.get(rating, 4)
-    ef = progress.ease_factor
-    reps = progress.repetitions
+    # Defaults apply at INSERT only; unflushed rows and legacy NULLs need coercion.
+    ef = progress.ease_factor if progress.ease_factor is not None else 2.5
+    reps = progress.repetitions if progress.repetitions is not None else 0
+    prev_interval = (
+        progress.interval_days if progress.interval_days is not None else 1
+    )
 
     if q < 3:
         # Failed recall — reset
@@ -152,7 +160,7 @@ def record_review(
         elif reps == 1:
             interval = 6
         else:
-            interval = round(progress.interval_days * ef)
+            interval = round(prev_interval * ef)
         reps += 1
 
     # Update ease factor (clamped to [1.3, ∞))

@@ -1,28 +1,20 @@
 # tests/conftest.py
 import os
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session as DbSession, sessionmaker
 
 from app.main import app
-from app.core.database import Base, get_db, engine as app_engine
+from app.core.database import Base, get_db
+from app.core.security import hash_password
+from app.models.class_ import Class
 from app.models.role import Role, RoleName
 from app.models.user import User
 from app.models.user_profile import UserProfile
-from app.core.security import hash_password
-
-from app.models import ( 
-    Role,
-    RoleName,
-    Session,
-    User,
-    UserActivity,
-    UserProfile,
-    Class,
-    ClassStudent,
-)
 
 # Database URLs
 TEST_DATABASE_URL = os.getenv(
@@ -36,48 +28,64 @@ SYSTEM_DATABASE_URL = os.getenv(
 
 
 def _setup_test_database():
-    """Create and setup test database."""
-    try:
-        # Try to connect to system database
-        engine = create_engine(
-            SYSTEM_DATABASE_URL, 
-            echo=False, 
-            isolation_level="AUTOCOMMIT"
-        )
-        with engine.connect() as conn:
-            # Drop if exists and create fresh database
-            try:
-                conn.execute(text("DROP DATABASE IF EXISTS moon_guide_test"))
-            except Exception:
-                pass
-            try:
-                conn.execute(text("CREATE DATABASE moon_guide_test"))
-            except Exception as e:
-                # Database might already exist, that's okay
-                if (
-                    "already exists" not in str(e).lower()
-                    and "duplicate" not in str(e).lower()
-                ):
-                    raise
-        engine.dispose()
-        return True
-    except OperationalError:
-        return False
+    """Create and setup test database. Retries for CI where Postgres may lag healthcheck."""
+    test_db = "moon_guide_test"
+    attempts = max(1, int(os.getenv("TEST_DB_CONNECT_ATTEMPTS", "30")))
+    delay_s = float(os.getenv("TEST_DB_CONNECT_DELAY_SEC", "1.0"))
+    last_error = None
+    for _ in range(attempts):
+        engine = None
+        try:
+            engine = create_engine(
+                SYSTEM_DATABASE_URL,
+                echo=False,
+                isolation_level="AUTOCOMMIT",
+            )
+            with engine.connect() as conn:
+                conn.execute(
+                    text(
+                        """
+                        SELECT pg_terminate_backend(pg_stat_activity.pid)
+                        FROM pg_stat_activity
+                        WHERE pg_stat_activity.datname = :dbname
+                          AND pid <> pg_backend_pid()
+                        """
+                    ),
+                    {"dbname": test_db},
+                )
+                try:
+                    conn.execute(text(f'DROP DATABASE IF EXISTS "{test_db}"'))
+                except Exception:
+                    pass
+                try:
+                    conn.execute(text(f'CREATE DATABASE "{test_db}"'))
+                except Exception as e:
+                    if (
+                        "already exists" not in str(e).lower()
+                        and "duplicate" not in str(e).lower()
+                    ):
+                        raise
+            return None
+        except OperationalError as e:
+            last_error = e
+            time.sleep(delay_s)
+        finally:
+            if engine is not None:
+                engine.dispose()
+    return last_error
 
 
 @pytest.fixture(scope="session")
 def test_engine():
     """Create a test database engine (session scope - created once)."""
-    if not _setup_test_database():
+    err = _setup_test_database()
+    if err is not None:
         pytest.skip(
             "\n" + "=" * 70 + "\n"
-            "PostgreSQL is not running. To run tests, start PostgreSQL:\n\n"
-            "Option 1 - Using Docker (recommended):\n"
-            "  docker-compose up -d postgres\n"
-            "  (Requires Docker Desktop to be running)\n\n"
-            "Option 2 - Using native PostgreSQL:\n"
-            "  Install PostgreSQL and ensure it's running on localhost:5432\n"
-            "  Create test database: psql -U postgres -c 'CREATE DATABASE moon_guide_test'\n\n"
+            f"PostgreSQL is not reachable after retries ({SYSTEM_DATABASE_URL}): {err}\n\n"
+            "Option 1 — Docker:  docker compose up -d postgres\n"
+            "Option 2 — Native:  PostgreSQL on localhost:5432, user postgres, then create DB moon_guide_test\n\n"
+            "CI: set SYSTEM_DATABASE_URL and TEST_DATABASE_URL (use 127.0.0.1 if localhost fails).\n"
             "=" * 70 + "\n"
         )
 
@@ -116,7 +124,7 @@ def db_session(test_engine):
 
 
 @pytest.fixture(scope="function")
-def client(db_session: Session):
+def client(db_session: DbSession):
     """Create a test client with overridden database dependency."""
     def override_get_db():
         try:
@@ -133,7 +141,7 @@ def client(db_session: Session):
 
 
 @pytest.fixture(scope="function")
-def setup_roles(db_session: Session):
+def setup_roles(db_session: DbSession):
     """Create default roles in test database."""
     # Clear existing roles
     db_session.query(Role).delete()
@@ -151,7 +159,7 @@ def setup_roles(db_session: Session):
 
 
 @pytest.fixture(scope="function")
-def test_user(db_session: Session, setup_roles):
+def test_user(db_session: DbSession, setup_roles):
     """Create a test student user."""
     student_role = db_session.query(Role).filter(
         Role.name == RoleName.STUDENT
@@ -179,7 +187,7 @@ def test_user(db_session: Session, setup_roles):
 
 
 @pytest.fixture(scope="function")
-def inactive_user(db_session: Session, setup_roles):
+def inactive_user(db_session: DbSession, setup_roles):
     """Create an inactive test user."""
     student_role = db_session.query(Role).filter(
         Role.name == RoleName.STUDENT
@@ -207,7 +215,7 @@ def inactive_user(db_session: Session, setup_roles):
 
 
 @pytest.fixture(scope="function")
-def teacher_user(db_session: Session, setup_roles):
+def teacher_user(db_session: DbSession, setup_roles):
     """Create a teacher test user."""
     teacher_role = db_session.query(Role).filter(
         Role.name == RoleName.TEACHER
@@ -235,7 +243,7 @@ def teacher_user(db_session: Session, setup_roles):
 
 
 @pytest.fixture(scope="function")
-def admin_user(db_session: Session, setup_roles):
+def admin_user(db_session: DbSession, setup_roles):
     """Create an admin test user."""
     admin_role = db_session.query(Role).filter(
         Role.name == RoleName.ADMIN
@@ -263,7 +271,7 @@ def admin_user(db_session: Session, setup_roles):
 
 
 @pytest.fixture(scope="function")
-def student_user(db_session: Session, setup_roles):
+def student_user(db_session: DbSession, setup_roles):
     """Create another student test user (alias for compatibility)."""
     student_role = db_session.query(Role).filter(
         Role.name == RoleName.STUDENT
@@ -343,10 +351,8 @@ def admin_auth_headers(client: TestClient, admin_user):
 
 # Additional fixtures for class testing
 @pytest.fixture
-def test_class(db_session: Session, teacher_user):
+def test_class(db_session: DbSession, teacher_user):
     """Create a test class."""
-    from app.models.class_ import Class
-    
     test_class = Class(
         name="Python 101",
         description="Introduction to Python",
