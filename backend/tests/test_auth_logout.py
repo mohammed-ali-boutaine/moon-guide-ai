@@ -70,9 +70,11 @@ def test_cannot_refresh_after_logout(client: TestClient, auth_headers):
     
     assert response.status_code == 401
 
+
+def test_logout_all_revokes_all_sessions(client: TestClient, db_session, test_user):
     """Test logout from all devices"""
     from app.models.session import Session
-    
+
     # Create multiple sessions for the user
     login_response1 = client.post(
         "/api/auth/login",
@@ -81,6 +83,7 @@ def test_cannot_refresh_after_logout(client: TestClient, auth_headers):
             "password": "Test123456"
         }
     )
+    assert login_response1.status_code == 200
     tokens1 = login_response1.json()
     
     login_response2 = client.post(
@@ -90,6 +93,7 @@ def test_cannot_refresh_after_logout(client: TestClient, auth_headers):
             "password": "Test123456"
         }
     )
+    assert login_response2.status_code == 200
     
     # Verify multiple sessions exist
     sessions_before = db_session.query(Session).filter(

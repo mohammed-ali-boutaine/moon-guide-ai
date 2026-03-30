@@ -35,6 +35,7 @@ def create_access_token(user_id: str, expires_delta: timedelta | None = None) ->
         "sub": str(user_id),
         "exp": expire,
         "iat": datetime.now(timezone.utc),
+        "jti": secrets.token_hex(16),
         "type": "access"
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
